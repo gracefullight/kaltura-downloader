@@ -87,6 +87,79 @@ https://cdn.example.com/480p.m3u8`;
     // The line after STREAM-INF is another tag, so this variant is skipped
     expect(variants).toHaveLength(0);
   });
+
+  it("returns empty array for empty input", () => {
+    expect(parseMasterPlaylist("", "https://cdn.example.com/m.m3u8")).toEqual(
+      [],
+    );
+  });
+
+  it("defaults bandwidth to 0 when BANDWIDTH missing", () => {
+    const m3u8 = `#EXTM3U
+#EXT-X-STREAM-INF:RESOLUTION=640x360
+https://cdn.example.com/360p.m3u8`;
+
+    const variants = parseMasterPlaylist(
+      m3u8,
+      "https://cdn.example.com/m.m3u8",
+    );
+    expect(variants).toHaveLength(1);
+    expect(variants[0].bandwidth).toBe(0);
+    expect(variants[0].label).toBe("360p");
+  });
+
+  it("skips STREAM-INF at the last line with no URL following", () => {
+    const m3u8 = `#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720`;
+
+    const variants = parseMasterPlaylist(
+      m3u8,
+      "https://cdn.example.com/m.m3u8",
+    );
+    expect(variants).toHaveLength(0);
+  });
+
+  it("skips STREAM-INF followed by an empty line", () => {
+    const m3u8 = `#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720
+
+https://cdn.example.com/720p.m3u8`;
+
+    const variants = parseMasterPlaylist(
+      m3u8,
+      "https://cdn.example.com/m.m3u8",
+    );
+    // The whitespace-only next line trims to empty, so it's skipped
+    expect(variants).toHaveLength(0);
+  });
+
+  it("handles RESOLUTION with non-standard format gracefully", () => {
+    const m3u8 = `#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=640x360
+https://cdn.example.com/360.m3u8`;
+
+    const variants = parseMasterPlaylist(
+      m3u8,
+      "https://cdn.example.com/m.m3u8",
+    );
+    expect(variants[0].height).toBe(360);
+    expect(variants[0].resolution).toBe("640x360");
+  });
+
+  it("labels 0kbps when both resolution and bandwidth are missing", () => {
+    const m3u8 = `#EXTM3U
+#EXT-X-STREAM-INF:CODECS="avc1.42001e"
+https://cdn.example.com/video.m3u8`;
+
+    const variants = parseMasterPlaylist(
+      m3u8,
+      "https://cdn.example.com/m.m3u8",
+    );
+    expect(variants).toHaveLength(1);
+    expect(variants[0].label).toBe("0kbps");
+    expect(variants[0].resolution).toBe("unknown");
+    expect(variants[0].bandwidth).toBe(0);
+  });
 });
 
 describe("parseVariantPlaylist", () => {
@@ -152,6 +225,27 @@ seg-1.ts
     const segments = parseVariantPlaylist(m3u8, "https://cdn.example.com/v.m3u8");
     expect(segments).toHaveLength(1);
     expect(segments[0]).toBe("https://cdn.example.com/seg-1.ts");
+  });
+
+  it("handles mixed absolute and relative segment URLs", () => {
+    const m3u8 = `#EXTM3U
+#EXTINF:10.0,
+https://cdn.example.com/seg-1.ts
+#EXTINF:10.0,
+seg-2.ts
+#EXTINF:10.0,
+https://other.cdn.com/seg-3.ts
+#EXT-X-ENDLIST`;
+
+    const segments = parseVariantPlaylist(
+      m3u8,
+      "https://cdn.example.com/path/variant.m3u8",
+    );
+    expect(segments).toEqual([
+      "https://cdn.example.com/seg-1.ts",
+      "https://cdn.example.com/path/seg-2.ts",
+      "https://other.cdn.com/seg-3.ts",
+    ]);
   });
 
   it("handles a real Kaltura CloudFront segment pattern", () => {
