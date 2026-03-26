@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+# Agent configs
+.agents/
+.claude/
+.codex/
+.gemini/
+.qwen/
+.omc/
+CLAUDE.md

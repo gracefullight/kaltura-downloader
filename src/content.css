@@ -1,0 +1,148 @@
+/* Kaltura Downloader - UI Styles */
+
+#kd-container {
+  padding: 8px 0 4px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+}
+
+/* Button bar */
+.kd-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Shared button */
+.kd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.kd-btn svg {
+  flex-shrink: 0;
+}
+
+.kd-btn-primary {
+  background: #006efa;
+  color: #fff;
+}
+
+.kd-btn-primary:hover:not(:disabled) {
+  background: #0058cc;
+}
+
+.kd-btn-secondary {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.kd-btn-secondary:hover {
+  background: #e0e0e0;
+}
+
+.kd-btn:disabled,
+.kd-btn.kd-loading {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Status message */
+.kd-msg {
+  font-size: 12px;
+  line-height: 1.4;
+  min-height: 17px;
+}
+
+.kd-msg-warn {
+  color: #b45309;
+}
+
+.kd-msg-info {
+  color: #0058cc;
+}
+
+.kd-msg-ok {
+  color: #15803d;
+}
+
+/* Quality menu */
+.kd-quality-menu {
+  display: none;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.kd-quality-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 16px;
+  background: #fff;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.kd-quality-item:hover {
+  border-color: #006efa;
+  background: #f0f6ff;
+}
+
+.kd-quality-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
+}
+
+.kd-quality-res {
+  font-size: 11px;
+  color: #888;
+}
+
+/* Progress bar */
+.kd-progress {
+  margin-top: 8px;
+}
+
+.kd-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.kd-progress-fill {
+  width: 0;
+  height: 100%;
+  background: #006efa;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.kd-progress-text {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #666;
+}

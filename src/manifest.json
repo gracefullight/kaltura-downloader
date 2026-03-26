@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Kaltura Downloader",
+  "version": "1.0.0",
+  "description": "Download videos from Kaltura players with one click",
+  "permissions": ["webRequest"],
+  "host_permissions": ["*://*.kaltura.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.kaf.kaltura.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": ["*://*.kaf.kaltura.com/*"],
+      "js": ["downloader.js"],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "world": "MAIN"
+    }
+  ],
+  "action": {
+    "default_title": "Kaltura Downloader"
+  }
+}
