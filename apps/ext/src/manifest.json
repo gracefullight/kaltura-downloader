@@ -3,7 +3,7 @@
   "name": "Kaltura Downloader",
   "version": "1.0.0",
   "description": "Download HLS videos from Kaltura (KAF) players",
-  "permissions": ["webRequest"],
+  "permissions": ["webRequest", "declarativeContent"],
   "host_permissions": ["*://*.kaltura.com/*"],
   "background": {
     "service_worker": "background.js"

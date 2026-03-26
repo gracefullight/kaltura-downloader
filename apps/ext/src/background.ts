@@ -1,3 +1,4 @@
+import { createIconImageData } from "./icon.js";
 import { parseMasterPlaylist } from "./parser.js";
 import type {
   GetDownloadInfoRequest,
@@ -7,6 +8,26 @@ import type {
 } from "./types.js";
 
 const store = new Map<string, ManifestInfo>();
+
+// --- Icon activation: grey by default, active on KAF pages ---
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.action.setIcon({ imageData: createIconImageData() });
+  chrome.action.disable();
+
+  chrome.declarativeContent.onPageChanged.removeRules(undefined, () => {
+    chrome.declarativeContent.onPageChanged.addRules([
+      {
+        conditions: [
+          new chrome.declarativeContent.PageStateMatcher({
+            pageUrl: { hostSuffix: ".kaf.kaltura.com" },
+          }),
+        ],
+        actions: [new chrome.declarativeContent.ShowAction()],
+      },
+    ]);
+  });
+});
 
 // --- Intercept master m3u8 from playManifest ---
 
