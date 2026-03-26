@@ -17,6 +17,15 @@ export interface ManifestInfo {
   timestamp: number;
 }
 
+/** Captured caption/subtitle info per tab */
+export interface CaptionInfo {
+  captionAssetId: string;
+  ks: string;
+  baseUrl: string;
+  /** Full download URL via action/serve */
+  serveUrl: string;
+}
+
 // --- Message types: Background <-> Content Script ---
 
 export interface ManifestReadyMessage {
@@ -34,6 +43,12 @@ export interface GetDownloadInfoResponse {
   ok: boolean;
   masterUrl?: string;
   variants?: Pick<Variant, "url" | "label" | "resolution" | "bandwidth">[];
+  captions?: CaptionInfo[];
+}
+
+export interface CaptionReadyMessage {
+  type: "CAPTION_READY";
+  captionAssetId: string;
 }
 
 // --- Message types: Content Script <-> Page Downloader ---

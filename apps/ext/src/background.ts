@@ -1,32 +1,22 @@
 import { createIconImageData } from "./icon.js";
 import { parseMasterPlaylist } from "./parser.js";
 import type {
+  CaptionInfo,
   GetDownloadInfoRequest,
   GetDownloadInfoResponse,
   ManifestInfo,
   ManifestReadyMessage,
+  CaptionReadyMessage,
 } from "./types.js";
 
 const store = new Map<string, ManifestInfo>();
+const captionStore = new Map<string, CaptionInfo[]>();
 
-// --- Icon activation: grey by default, active on KAF pages ---
+// --- Icon: disabled by default, activated per-tab on manifest detection ---
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.action.setIcon({ imageData: createIconImageData() });
   chrome.action.disable();
-
-  chrome.declarativeContent.onPageChanged.removeRules(undefined, () => {
-    chrome.declarativeContent.onPageChanged.addRules([
-      {
-        conditions: [
-          new chrome.declarativeContent.PageStateMatcher({
-            pageUrl: { hostSuffix: ".kaf.kaltura.com" },
-          }),
-        ],
-        actions: [new chrome.declarativeContent.ShowAction()],
-      },
-    ]);
-  });
 });
 
 // --- Intercept master m3u8 from playManifest ---
@@ -51,9 +41,45 @@ chrome.webRequest.onCompleted.addListener(
       timestamp: Date.now(),
     });
 
+    chrome.action.enable(details.tabId);
     fetchAndParseMaster(key, details.url, details.tabId, entryId);
   },
   { urls: ["*://*.kaltura.com/*playManifest*"] },
+);
+
+// --- Intercept caption/subtitle WebVTT requests ---
+
+chrome.webRequest.onCompleted.addListener(
+  (details) => {
+    if (details.tabId === -1) return;
+    if (!details.url.includes("caption_captionasset")) return;
+
+    const captionAssetId = details.url.match(
+      /captionAssetId\/([^/]+)/,
+    )?.[1];
+    const ks = details.url.match(/\/ks\/([^/]+)/)?.[1];
+    if (!captionAssetId || !ks) return;
+
+    const tabKey = String(details.tabId);
+    const existing = captionStore.get(tabKey) ?? [];
+
+    // Dedupe by captionAssetId
+    if (existing.some((c) => c.captionAssetId === captionAssetId)) return;
+
+    const baseUrl = new URL(details.url).origin;
+    // serveWebVTT with large segmentDuration so segment 1 covers the entire video
+    const serveUrl = `${baseUrl}/api_v3/index.php/service/caption_captionasset/action/serveWebVTT/captionAssetId/${captionAssetId}/segmentDuration/86400/ks/${ks}/segmentIndex/1.vtt`;
+
+    existing.push({ captionAssetId, ks, baseUrl, serveUrl });
+    captionStore.set(tabKey, existing);
+
+    const msg: CaptionReadyMessage = {
+      type: "CAPTION_READY",
+      captionAssetId,
+    };
+    chrome.tabs.sendMessage(details.tabId, msg).catch(() => {});
+  },
+  { urls: ["*://*.kaltura.com/*caption_captionasset*"] },
 );
 
 // --- Fetch & parse the master m3u8 ---
@@ -115,6 +141,8 @@ chrome.runtime.onMessage.addListener(
       return;
     }
 
+    const captions = captionStore.get(String(tabId)) ?? [];
+
     sendResponse({
       ok: true,
       masterUrl: info.masterUrl,
@@ -124,6 +152,7 @@ chrome.runtime.onMessage.addListener(
         resolution: v.resolution,
         bandwidth: v.bandwidth,
       })),
+      captions,
     });
   },
 );
@@ -134,4 +163,5 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   for (const key of store.keys()) {
     if (key.startsWith(`${tabId}:`)) store.delete(key);
   }
+  captionStore.delete(String(tabId));
 });

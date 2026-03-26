@@ -27,6 +27,12 @@ window.addEventListener("message", (e: MessageEvent) => {
         post<ErrorMessage>("ERROR", { error: err.message || String(err) });
       },
     );
+  } else if (e.data.type === "DOWNLOAD_SUBTITLE") {
+    downloadSubtitle(e.data.url as string, e.data.filename as string).catch(
+      (err: Error) => {
+        post<ErrorMessage>("ERROR", { error: err.message || String(err) });
+      },
+    );
   } else if (e.data.type === "ABORT") {
     aborted = true;
   }
@@ -164,6 +170,40 @@ async function processQueue(
       );
     }
   }
+}
+
+// --- Helpers ---
+
+// --- Subtitle download ---
+
+async function downloadSubtitle(
+  url: string,
+  filename: string,
+): Promise<void> {
+  post<ProgressMessage>("PROGRESS", {
+    phase: "downloading",
+    text: "Downloading subtitle…",
+  });
+
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Subtitle fetch failed: HTTP ${resp.status}`);
+
+  const text = await resp.text();
+  const blob = new Blob([text], { type: "text/vtt" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename || "subtitle.vtt";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+
+  const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+  post<CompleteMessage>("COMPLETE", { size: blob.size, sizeMB });
 }
 
 // --- Helpers ---

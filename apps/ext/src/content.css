@@ -1,137 +1,140 @@
-/* Kaltura Downloader - UI Styles */
+/* Kaltura Downloader — Overlay UI */
 
-#kd-container {
-  padding: 8px 0 4px;
+#kd-overlay {
+  position: absolute;
+  bottom: 48px;
+  right: 8px;
+  z-index: 100000;
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
+  pointer-events: auto;
 }
 
-/* Button bar — right-aligned below the player */
-.kd-bar {
+/* Panel */
+.kd-panel {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 
-/* Shared button */
-.kd-btn {
+/* Pill buttons */
+.kd-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
+  gap: 5px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   transition:
     background 0.15s,
-    opacity 0.15s;
-  line-height: 1;
-  white-space: nowrap;
+    opacity 0.15s,
+    transform 0.15s;
 }
 
-.kd-btn svg {
+.kd-pill:hover:not(:disabled) {
+  transform: scale(1.04);
+}
+
+.kd-pill svg {
   flex-shrink: 0;
 }
 
-.kd-btn-primary {
+.kd-pill-primary {
   background: #006efa;
   color: #fff;
 }
 
-.kd-btn-primary:hover:not(:disabled) {
+.kd-pill-primary:hover:not(:disabled) {
   background: #0058cc;
 }
 
-.kd-btn-secondary {
-  background: #f0f0f0;
+.kd-pill-secondary {
+  background: rgba(255, 255, 255, 0.95);
   color: #333;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
 }
 
-.kd-btn-secondary:hover {
-  background: #e0e0e0;
+.kd-pill-secondary:hover {
+  background: #fff;
 }
 
-.kd-btn:disabled,
-.kd-btn.kd-loading {
+.kd-pill:disabled,
+.kd-pill.kd-loading {
   opacity: 0.6;
   cursor: default;
 }
 
-/* Status message */
-.kd-msg {
-  font-size: 12px;
-  line-height: 1.4;
-  min-height: 17px;
-  text-align: right;
-}
-
-.kd-msg-warn {
-  color: #b45309;
-}
-
-.kd-msg-info {
-  color: #0058cc;
-}
-
-.kd-msg-ok {
-  color: #15803d;
-}
-
-/* Quality menu — right-aligned */
+/* Quality menu */
 .kd-quality-menu {
   display: none;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 4px;
 }
 
 .kd-quality-item {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 16px;
-  background: #fff;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #bbb;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
-  transition:
-    border-color 0.15s,
-    background 0.15s;
+  color: #333;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition: border-color 0.15s;
 }
 
 .kd-quality-item:hover {
   border-color: #006efa;
-  background: #f0f6ff;
+  background: #fff;
 }
 
-.kd-quality-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: #222;
-}
-
-.kd-quality-res {
+/* Status message */
+.kd-msg {
   font-size: 11px;
-  color: #888;
+  line-height: 1.3;
+  text-align: right;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  max-width: 200px;
+  word-break: break-word;
+}
+
+.kd-msg:empty {
+  display: none;
+}
+
+.kd-msg-warn {
+  color: #fbbf24;
+}
+
+.kd-msg-info {
+  color: #93c5fd;
+}
+
+.kd-msg-ok {
+  color: #86efac;
 }
 
 /* Progress bar */
 .kd-progress {
-  margin-top: 8px;
+  width: 160px;
 }
 
 .kd-progress-bar {
   width: 100%;
-  height: 6px;
-  background: #e5e7eb;
-  border-radius: 3px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
   overflow: hidden;
 }
 
@@ -139,14 +142,15 @@
   width: 0;
   height: 100%;
   background: #006efa;
-  border-radius: 3px;
+  border-radius: 2px;
   transition: width 0.3s ease;
 }
 
 .kd-progress-text {
   display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  color: #666;
+  margin-top: 2px;
+  font-size: 10px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   text-align: right;
 }
