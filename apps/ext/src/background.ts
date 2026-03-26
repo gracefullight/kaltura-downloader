@@ -41,6 +41,9 @@ chrome.webRequest.onCompleted.addListener(
       timestamp: Date.now(),
     });
 
+    // Clear stale captions from previous video in this tab
+    captionStore.delete(String(details.tabId));
+
     chrome.action.enable(details.tabId);
     fetchAndParseMaster(key, details.url, details.tabId, entryId);
   },
