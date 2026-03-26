@@ -1,0 +1,20 @@
+name: Update oh-my-agent
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday 9:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Update oh-my-agent skills
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: first-fluke/oma-update-action@v1
+        with:
+          mode: pr
