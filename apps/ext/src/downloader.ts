@@ -6,6 +6,7 @@
  */
 
 import { parseVariantPlaylist } from "./parser.js";
+import { transmuxTsToMp4 } from "./transmux.js";
 import type { CompleteMessage, ErrorMessage, ProgressMessage } from "./types.js";
 
 const MAX_CONCURRENT = 6;
@@ -91,7 +92,7 @@ async function downloadHLS(variantUrl: string, filename: string): Promise<void> 
     return;
   }
 
-  // 3. Merge segments
+  // 3. Merge TS segments
   post<ProgressMessage>("PROGRESS", {
     phase: "merging",
     text: "Merging segments…",
@@ -105,18 +106,27 @@ async function downloadHLS(variantUrl: string, filename: string): Promise<void> 
     offset += buf.byteLength;
   }
 
-  // 4. Trigger download
+  // 4. Transmux TS → MP4
+  post<ProgressMessage>("PROGRESS", {
+    phase: "merging",
+    text: "Converting to MP4…",
+  });
+
+  const mp4Data = await transmuxTsToMp4(merged);
+
+  // 5. Save as MP4
   post<ProgressMessage>("PROGRESS", {
     phase: "saving",
     text: "Saving file…",
   });
 
-  const blob = new Blob([merged], { type: "video/mp2t" });
+  const mp4Filename = (filename || "video.ts").replace(/\.ts$/, ".mp4");
+  const blob = new Blob([mp4Data], { type: "video/mp4" });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename || "video.ts";
+  a.download = mp4Filename;
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
