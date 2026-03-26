@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Kaltura Downloader",
   "version": "1.0.0",
-  "description": "Download videos from Kaltura players with one click",
+  "description": "Download HLS videos from Kaltura (KAF) players",
   "permissions": ["webRequest"],
   "host_permissions": ["*://*.kaltura.com/*"],
   "background": {
