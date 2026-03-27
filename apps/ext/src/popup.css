@@ -1,0 +1,175 @@
+/* Kaltura Downloader — Popup UI */
+
+:root {
+  --kd-primary: #006efa;
+  --kd-primary-hover: #0058cc;
+  --kd-bg: #f9fafb;
+  --kd-surface: #ffffff;
+  --kd-text: #333333;
+  --kd-text-muted: #6b7280;
+  --kd-border: #e5e7eb;
+  --kd-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --kd-bmc: #ffdd00;
+  --kd-bmc-text: #000000;
+  --kd-gap: 12px;
+  --kd-pad: 16px;
+  --kd-radius: 20px;
+  --kd-radius-sm: 8px;
+  --kd-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 280px;
+  background: var(--kd-bg);
+  font-family: var(--kd-font);
+  font-size: 12px;
+  color: var(--kd-text);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Sections ─────────────────────────────────────────── */
+
+.kd-section {
+  padding: var(--kd-pad);
+}
+
+.kd-section + .kd-section {
+  border-top: 1px solid var(--kd-border);
+}
+
+/* ── Header ───────────────────────────────────────────── */
+
+.kd-header {
+  display: flex;
+  align-items: center;
+  gap: var(--kd-gap);
+}
+
+.kd-header__icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.kd-header__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kd-header__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--kd-text);
+}
+
+.kd-header__version {
+  font-size: 11px;
+  color: var(--kd-text-muted);
+}
+
+/* ── Creator ──────────────────────────────────────────── */
+
+.kd-creator {
+  font-size: 12px;
+  color: var(--kd-text);
+}
+
+.kd-creator__link {
+  color: var(--kd-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.kd-creator__link:hover {
+  text-decoration: underline;
+}
+
+.kd-creator__link:focus-visible {
+  outline: 2px solid var(--kd-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ── Actions ──────────────────────────────────────────── */
+
+.kd-actions {
+  display: flex;
+  gap: var(--kd-gap);
+  flex-wrap: wrap;
+}
+
+/* ── Pill buttons ─────────────────────────────────────── */
+
+.kd-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--kd-radius);
+  font-size: 12px;
+  font-family: var(--kd-font);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow: var(--kd-shadow);
+  transition:
+    background 0.15s,
+    filter 0.15s,
+    transform 0.15s;
+}
+
+.kd-pill svg {
+  flex-shrink: 0;
+}
+
+.kd-pill:focus-visible {
+  outline: 2px solid var(--kd-primary);
+  outline-offset: 2px;
+}
+
+.kd-pill--primary {
+  background: var(--kd-primary);
+  color: #ffffff;
+}
+
+.kd-pill--primary:hover {
+  background: var(--kd-primary-hover);
+  transform: scale(1.04);
+}
+
+.kd-pill--bmc {
+  background: var(--kd-bmc);
+  color: var(--kd-bmc-text);
+}
+
+.kd-pill--bmc:hover {
+  filter: brightness(0.95);
+  transform: scale(1.04);
+}
+
+/* ── Reduced motion ───────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .kd-pill {
+    transition: background 0.15s, filter 0.15s;
+  }
+
+  .kd-pill--primary:hover,
+  .kd-pill--bmc:hover {
+    transform: none;
+  }
+}

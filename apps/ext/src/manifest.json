@@ -25,6 +25,7 @@
     }
   ],
   "action": {
-    "default_title": "Kaltura Downloader"
+    "default_title": "Kaltura Downloader",
+    "default_popup": "popup.html"
   }
 }

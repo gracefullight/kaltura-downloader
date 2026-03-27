@@ -18,5 +18,7 @@ export default defineConfig({
   onSuccess: async () => {
     await cp("src/manifest.json", "dist/manifest.json");
     await cp("src/content.css", "dist/content.css");
+    await cp("src/popup.html", "dist/popup.html");
+    await cp("src/popup.css", "dist/popup.css");
   },
 });
