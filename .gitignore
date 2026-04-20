@@ -2,11 +2,6 @@ node_modules/
 dist/
 .DS_Store
 
-# Agent configs
-.agents/
-.claude/
-.codex/
-.gemini/
-.qwen/
-.omc/
-CLAUDE.md
+.claude/settings.local.json
+.agents/results/
+.agents/state/
