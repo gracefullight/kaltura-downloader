@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/gracefullight/kaltura-downloader/compare/ext-v1.1.0...ext-v1.2.0) (2026-04-20)
+
+
+### Features
+
+* **ext:** add popup with creator info and sponsor links ([c01dbbb](https://github.com/gracefullight/kaltura-downloader/commit/c01dbbb4f2e1b4d2cfd019d00a430a67fbfcc1a4))
+* **ext:** transmux TS to MP4 in browser using mux.js ([3d8d28e](https://github.com/gracefullight/kaltura-downloader/commit/3d8d28e2fe728171aa3632f7625db9609f2afbed))
+
 ## [1.1.0](https://github.com/gracefullight/kaltura-downloader/compare/ext-v1.0.0...ext-v1.1.0) (2026-03-26)
 
 
