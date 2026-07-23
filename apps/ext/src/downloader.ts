@@ -2,12 +2,18 @@
  * Page-context HLS segment downloader (MAIN world).
  *
  * Runs in the page's origin so fetch() inherits the same CORS
- * permissions as the Kaltura video player.
+ * permissions as the active HLS video player.
  */
 
-import { parseVariantPlaylist } from "./parser.js";
+import { parseMediaPlaylist } from "./parser.js";
+import type { HlsSegment } from "./parser.js";
 import { transmuxTsToMp4 } from "./transmux.js";
-import type { CompleteMessage, ErrorMessage, ProgressMessage } from "./types.js";
+import type {
+  CompleteMessage,
+  ErrorMessage,
+  PageMessage,
+  ProgressMessage,
+} from "./types.js";
 
 const MAX_CONCURRENT = 6;
 const MAX_RETRIES = 3;
@@ -52,7 +58,7 @@ async function downloadHLS(variantUrl: string, filename: string): Promise<void> 
   if (!resp.ok) throw new Error(`Playlist fetch failed: HTTP ${resp.status}`);
 
   const m3u8Text = await resp.text();
-  const segments = parseVariantPlaylist(m3u8Text, variantUrl);
+  const segments = parseMediaPlaylist(m3u8Text, variantUrl);
 
   if (segments.length === 0) {
     throw new Error("No segments found in playlist");
@@ -70,9 +76,10 @@ async function downloadHLS(variantUrl: string, filename: string): Promise<void> 
   const buffers = new Array<ArrayBuffer>(segments.length);
   let completed = 0;
 
-  const queue = segments.map((url, idx) => ({ url, idx }));
+  const keyCache = new Map<string, Promise<CryptoKey>>();
+  const queue = segments.map((segment, idx) => ({ segment, idx }));
   const workers = Array.from({ length: Math.min(MAX_CONCURRENT, queue.length) }, () =>
-    processQueue(queue, buffers, () => {
+    processQueue(queue, buffers, keyCache, () => {
       completed++;
       const pct = Math.round((completed / segments.length) * 100);
       post<ProgressMessage>("PROGRESS", {
@@ -121,7 +128,9 @@ async function downloadHLS(variantUrl: string, filename: string): Promise<void> 
   });
 
   const mp4Filename = (filename || "video.ts").replace(/\.ts$/, ".mp4");
-  const blob = new Blob([mp4Data], { type: "video/mp4" });
+  const blob = new Blob([mp4Data as Uint8Array<ArrayBuffer>], {
+    type: "video/mp4",
+  });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
@@ -141,13 +150,14 @@ async function downloadHLS(variantUrl: string, filename: string): Promise<void> 
 // --- Concurrent queue worker ---
 
 interface QueueItem {
-  url: string;
+  segment: HlsSegment;
   idx: number;
 }
 
 async function processQueue(
   queue: QueueItem[],
   buffers: ArrayBuffer[],
+  keyCache: Map<string, Promise<CryptoKey>>,
   onComplete: () => void,
 ): Promise<void> {
   while (queue.length > 0) {
@@ -160,9 +170,12 @@ async function processQueue(
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       if (aborted) return;
       try {
-        const resp = await fetch(item.url);
+        const resp = await fetch(item.segment.url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        buffers[item.idx] = await resp.arrayBuffer();
+        const data = await resp.arrayBuffer();
+        buffers[item.idx] = item.segment.encryption
+          ? await decryptSegment(data, item.segment, keyCache)
+          : data;
         onComplete();
         lastError = null;
         break;
@@ -183,6 +196,52 @@ async function processQueue(
 }
 
 // --- Helpers ---
+
+async function decryptSegment(
+  data: ArrayBuffer,
+  segment: HlsSegment,
+  keyCache: Map<string, Promise<CryptoKey>>,
+): Promise<ArrayBuffer> {
+  const encryption = segment.encryption;
+  if (!encryption) return data;
+
+  const key = await loadAesKey(encryption.keyUrl, keyCache);
+  try {
+    return await crypto.subtle.decrypt({ name: "AES-CBC", iv: encryption.iv }, key, data);
+  } catch {
+    throw new Error(`AES-128 decryption failed for segment ${segment.sequence}`);
+  }
+}
+
+async function loadAesKey(
+  keyUrl: string,
+  keyCache: Map<string, Promise<CryptoKey>>,
+): Promise<CryptoKey> {
+  const cached = keyCache.get(keyUrl);
+  if (cached) return cached;
+
+  const pending = (async () => {
+    const resp = await fetch(keyUrl);
+    if (!resp.ok) throw new Error(`Encryption key fetch failed: HTTP ${resp.status}`);
+
+    const keyData = await resp.arrayBuffer();
+    if (keyData.byteLength !== 16) {
+      throw new Error(`Invalid AES-128 key length: ${keyData.byteLength}`);
+    }
+
+    return crypto.subtle.importKey("raw", keyData, { name: "AES-CBC" }, false, [
+      "decrypt",
+    ]);
+  })();
+
+  keyCache.set(keyUrl, pending);
+  try {
+    return await pending;
+  } catch (error) {
+    if (keyCache.get(keyUrl) === pending) keyCache.delete(keyUrl);
+    throw error;
+  }
+}
 
 // --- Subtitle download ---
 
@@ -218,7 +277,7 @@ async function downloadSubtitle(
 
 // --- Helpers ---
 
-function post<T extends Record<string, unknown>>(
+function post<T extends PageMessage>(
   type: string,
   data: Omit<T, "source" | "type">,
 ): void {

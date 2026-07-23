@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseMasterPlaylist, parseVariantPlaylist } from "./parser.js";
+import {
+  parseMasterPlaylist,
+  parseMediaPlaylist,
+  parseVariantPlaylist,
+} from "./parser.js";
 
 describe("parseMasterPlaylist", () => {
   it("parses variants with absolute URLs", () => {
@@ -272,5 +276,63 @@ seg-3-v1-a1.ts?Policy=eyJ&Signature=fGzx&Key-Pair-Id=APKAJT
       expect(seg).toMatch(/\/name\/a\.mp4\/seg-\d+-v1-a1\.ts\?Policy=eyJ/);
       expect(seg).toContain("Key-Pair-Id=APKAJT");
     }
+  });
+});
+
+describe("parseMediaPlaylist", () => {
+  it("applies AES-128 keys with the media sequence as the default IV", () => {
+    const m3u8 = `#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:2
+#EXT-X-KEY:METHOD=AES-128,URI="https://keys.example.com/video.key"
+#EXTINF:10,
+video-2.ts?token=signed
+#EXTINF:10,
+video-3.ts?token=signed
+#EXT-X-ENDLIST`;
+
+    const segments = parseMediaPlaylist(
+      m3u8,
+      "https://cdn.example.com/path/variant.m3u8?token=signed",
+    );
+
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toMatchObject({
+      url: "https://cdn.example.com/path/video-2.ts?token=signed",
+      sequence: 2,
+      encryption: {
+        method: "AES-128",
+        keyUrl: "https://keys.example.com/video.key",
+      },
+    });
+    expect(Array.from(segments[0].encryption?.iv ?? [])).toEqual([
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
+    ]);
+    expect(segments[1].encryption?.iv[15]).toBe(3);
+  });
+
+  it("uses an explicit IV and supports METHOD=NONE", () => {
+    const m3u8 = `#EXTM3U
+#EXT-X-KEY:METHOD=AES-128,URI="key.bin",IV=0x01
+encrypted.ts
+#EXT-X-KEY:METHOD=NONE
+clear.ts`;
+
+    const segments = parseMediaPlaylist(m3u8, "https://cdn.example.com/hls/list.m3u8");
+
+    expect(segments[0].encryption?.keyUrl).toBe(
+      "https://cdn.example.com/hls/key.bin",
+    );
+    expect(segments[0].encryption?.iv[15]).toBe(1);
+    expect(segments[1].encryption).toBeUndefined();
+  });
+
+  it("rejects unsupported encryption methods", () => {
+    const m3u8 = `#EXTM3U
+#EXT-X-KEY:METHOD=SAMPLE-AES,URI="key.bin"
+segment.ts`;
+
+    expect(() =>
+      parseMediaPlaylist(m3u8, "https://cdn.example.com/list.m3u8"),
+    ).toThrow("Unsupported HLS encryption method");
   });
 });

@@ -2,13 +2,15 @@
 
 [English](./README.md) | [한국어](./README.ko.md)
 
-Kaltura(KAF) 플레이어에서 HLS 영상을 다운로드하는 Chrome 확장 프로그램.
+Kaltura(KAF)와 Hotmart 플레이어에서 HLS 영상을 다운로드하는 Chrome 확장 프로그램.
 
 영상 아래에 다운로드 버튼이 생기고, 클릭하면 세그먼트를 병렬로 받아 하나의 파일로 합쳐 줍니다.
 
 ## 기능
 
 - Kaltura playManifest(m3u8) 자동 감지
+- Hotmart 표준 m3u8 자동 감지
+- AES-128 암호화 HLS 세그먼트 자동 복호화
 - 화질 선택 (1080p, 720p 등)
 - HLS 세그먼트 6개 동시 다운로드 + 자동 재시도
 - 진행률 표시

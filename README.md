@@ -2,13 +2,15 @@
 
 [English](./README.md) | [한국어](./README.ko.md)
 
-Chrome extension that downloads HLS videos from Kaltura (KAF) players.
+Chrome extension that downloads HLS videos from Kaltura (KAF) and Hotmart players.
 
 Adds a download button below the video player. Click it to download all segments in parallel and merge them into a single file.
 
 ## Features
 
 - Auto-detects Kaltura playManifest (m3u8)
+- Auto-detects Hotmart m3u8 playlists
+- Decrypts AES-128 HLS segments automatically
 - Quality selection (1080p, 720p, etc.)
 - 6 concurrent HLS segment downloads with auto-retry
 - Real-time progress bar

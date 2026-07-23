@@ -1,12 +1,13 @@
 import { createIconImageData } from "./icon.js";
-import { parseMasterPlaylist } from "./parser.js";
+import { parseMasterPlaylist, parseMediaPlaylist } from "./parser.js";
 import type {
+  CaptionReadyMessage,
   CaptionInfo,
   GetDownloadInfoRequest,
   GetDownloadInfoResponse,
   ManifestInfo,
   ManifestReadyMessage,
-  CaptionReadyMessage,
+  Variant,
 } from "./types.js";
 
 const store = new Map<string, ManifestInfo>();
@@ -48,6 +49,35 @@ chrome.webRequest.onCompleted.addListener(
     fetchAndParseMaster(key, details.url, details.tabId, entryId);
   },
   { urls: ["*://*.kaltura.com/*playManifest*"] },
+);
+
+// --- Intercept standard Hotmart HLS manifests ---
+
+chrome.webRequest.onCompleted.addListener(
+  (details) => {
+    if (details.tabId === -1) return;
+
+    const entryId = details.url.match(/\/video\/([^/]+)\//)?.[1];
+    if (!entryId) return;
+
+    const key = `${details.tabId}:${entryId}`;
+    const existing = store.get(key);
+    if (existing) {
+      existing.timestamp = Date.now();
+    } else {
+      store.set(key, {
+        entryId,
+        partnerId: "hotmart",
+        masterUrl: details.url,
+        variants: [],
+        timestamp: Date.now(),
+      });
+    }
+
+    chrome.action.enable(details.tabId);
+    fetchAndParseMaster(key, details.url, details.tabId, entryId);
+  },
+  { urls: ["*://*.hotmart.com/*.m3u8*"] },
 );
 
 // --- Intercept caption/subtitle WebVTT requests ---
@@ -98,18 +128,26 @@ async function fetchAndParseMaster(
     if (!resp.ok) return;
 
     const text = await resp.text();
-    const variants = parseMasterPlaylist(text, resp.url);
+    const masterVariants = parseMasterPlaylist(text, resp.url);
+    const mediaSegments =
+      masterVariants.length === 0 ? parseMediaPlaylist(text, resp.url) : [];
+    if (masterVariants.length === 0 && mediaSegments.length === 0) return;
 
     const info = store.get(key);
-    if (info) {
-      info.variants = variants;
-      info.finalUrl = resp.url;
+    if (!info) return;
+
+    if (masterVariants.length > 0) {
+      info.variants = masterVariants;
+      info.masterUrl = resp.url;
+    } else {
+      mergeDirectVariant(info.variants, createDirectVariant(resp.url));
     }
+    info.finalUrl = resp.url;
 
     const msg: ManifestReadyMessage = {
       type: "MANIFEST_READY",
       entryId,
-      variants: variants.map((v) => ({
+      variants: info.variants.map((v) => ({
         label: v.label,
         resolution: v.resolution,
         bandwidth: v.bandwidth,
@@ -120,6 +158,30 @@ async function fetchAndParseMaster(
   } catch {
     // Non-critical
   }
+}
+
+function createDirectVariant(url: string): Variant {
+  const videoBandwidth = Number.parseInt(url.match(/video=(\d+)/)?.[1] ?? "0", 10);
+  return {
+    url,
+    bandwidth: videoBandwidth,
+    resolution: "unknown",
+    height: 0,
+    label: videoBandwidth ? `${Math.round(videoBandwidth / 1000)}kbps` : "HLS",
+  };
+}
+
+function mergeDirectVariant(variants: Variant[], direct: Variant): void {
+  const directPath = new URL(direct.url).pathname;
+  const existing = variants.find(
+    (variant) => new URL(variant.url).pathname === directPath,
+  );
+  if (existing) {
+    existing.url = direct.url;
+    return;
+  }
+  variants.push(direct);
+  variants.sort((a, b) => b.bandwidth - a.bandwidth);
 }
 
 // --- Message handling ---
@@ -138,7 +200,8 @@ chrome.runtime.onMessage.addListener(
       return;
     }
 
-    const info = store.get(`${tabId}:${msg.entryId}`);
+    const exact = msg.entryId ? store.get(`${tabId}:${msg.entryId}`) : undefined;
+    const info = exact ?? findLatestManifest(tabId);
     if (!info || info.variants.length === 0) {
       sendResponse({ ok: false });
       return;
@@ -159,6 +222,15 @@ chrome.runtime.onMessage.addListener(
     });
   },
 );
+
+function findLatestManifest(tabId: number): ManifestInfo | undefined {
+  let latest: ManifestInfo | undefined;
+  for (const [key, info] of store) {
+    if (!key.startsWith(`${tabId}:`)) continue;
+    if (!latest || info.timestamp > latest.timestamp) latest = info;
+  }
+  return latest;
+}
 
 // --- Cleanup on tab close ---
 

@@ -8,10 +8,12 @@ vi.mock("./icon.js", () => ({
 
 vi.mock("./parser.js", () => ({
   parseMasterPlaylist: vi.fn(() => []),
+  parseMediaPlaylist: vi.fn(() => []),
 }));
 
-import { parseMasterPlaylist } from "./parser.js";
+import { parseMasterPlaylist, parseMediaPlaylist } from "./parser.js";
 const mockParse = parseMasterPlaylist as ReturnType<typeof vi.fn>;
+const mockParseMedia = parseMediaPlaylist as ReturnType<typeof vi.fn>;
 
 // --- Mock Chrome APIs & capture listeners ---
 
@@ -68,7 +70,8 @@ beforeAll(async () => {
 // --- Helpers ---
 
 const playManifest = () => webRequestCbs[0].cb;
-const captionHandler = () => webRequestCbs[1].cb;
+const hotmartManifest = () => webRequestCbs[1].cb;
+const captionHandler = () => webRequestCbs[2].cb;
 
 function makePlayManifestUrl(
   partnerId: string,
@@ -90,6 +93,7 @@ describe("background service worker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockParse.mockReturnValue([]);
+    mockParseMedia.mockReturnValue([]);
     mockFetch.mockReset();
   });
 
@@ -201,7 +205,7 @@ describe("background service worker", () => {
 
   describe("caption interceptor", () => {
     it("registers with correct URL filter", () => {
-      expect(webRequestCbs[1].filter).toEqual({
+      expect(webRequestCbs[2].filter).toEqual({
         urls: ["*://*.kaltura.com/*caption_captionasset*"],
       });
     });
@@ -258,6 +262,65 @@ describe("background service worker", () => {
         chrome.tabs.sendMessage as ReturnType<typeof vi.fn>
       ).mock.calls.filter((c: any[]) => c[0] === 23);
       expect(calls).toHaveLength(2);
+    });
+  });
+
+  describe("Hotmart HLS interceptor", () => {
+    it("registers with the Hotmart m3u8 URL filter", () => {
+      expect(webRequestCbs[1].filter).toEqual({
+        urls: ["*://*.hotmart.com/*.m3u8*"],
+      });
+    });
+
+    it("stores a media playlist as a directly downloadable variant", async () => {
+      const manifestUrl =
+        "https://vod-akm.play.hotmart.com/video/video123/hls/stream-audio=64-video=1243579.m3u8?token=signed";
+      mockParseMedia.mockReturnValue([
+        { url: "https://cdn.example.com/segment.ts", sequence: 2 },
+      ]);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        url: manifestUrl,
+        text: () => Promise.resolve("#EXTM3U\nsegment.ts\n"),
+      });
+
+      hotmartManifest()({ tabId: 50, url: manifestUrl });
+
+      await vi.waitFor(() => {
+        expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+          50,
+          expect.objectContaining({ type: "MANIFEST_READY", entryId: "video123" }),
+        );
+      });
+
+      const sendResponse = vi.fn();
+      onMessageCb(
+        { type: "GET_DOWNLOAD_INFO", entryId: "" },
+        { tab: { id: 50 } },
+        sendResponse,
+      );
+
+      expect(sendResponse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ok: true,
+          variants: [
+            expect.objectContaining({
+              url: manifestUrl,
+              label: "1244kbps",
+            }),
+          ],
+        }),
+      );
+    });
+
+    it("ignores Hotmart manifest URLs without a video id", () => {
+      hotmartManifest()({
+        tabId: 51,
+        url: "https://vod-akm.play.hotmart.com/hls/master.m3u8",
+      });
+
+      expect(chrome.action.enable).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 

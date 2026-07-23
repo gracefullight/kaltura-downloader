@@ -1,7 +1,7 @@
 /**
  * Content Script (ISOLATED world).
  *
- * Detects the Kaltura player, overlays a download button on the player,
+ * Detects a supported HLS player, overlays a download button on the player,
  * and bridges between the background and the page-context downloader.
  */
 
@@ -18,8 +18,8 @@ const MSG_TO_PAGE = "kd-content";
 const MSG_FROM_PAGE = "kd-downloader";
 
 const entryIdMatch = location.pathname.match(/entryid\/([^/]+)/i);
-if (entryIdMatch) {
-  const entryId = entryIdMatch[1];
+{
+  const entryId = entryIdMatch?.[1] ?? "";
   let variants: Pick<
     Variant,
     "url" | "label" | "resolution" | "bandwidth"
@@ -54,7 +54,11 @@ if (entryIdMatch) {
 
   chrome.runtime.onMessage.addListener(
     (msg: ManifestReadyMessage | CaptionReadyMessage) => {
-      if (msg.type === "MANIFEST_READY" && "entryId" in msg && msg.entryId === entryId) {
+      if (
+        msg.type === "MANIFEST_READY" &&
+        "entryId" in msg &&
+        (!entryId || msg.entryId === entryId)
+      ) {
         const el = document.getElementById("kd-msg");
         if (el && !el.textContent?.includes("Download")) {
           showMsg("Ready", "ok");
@@ -98,7 +102,8 @@ if (entryIdMatch) {
       document.getElementById("kplayer") ||
       document.getElementById("kaltura_player") ||
       (document.querySelector("[id*='kaltura_player']") as HTMLElement) ||
-      (document.querySelector(".mwEmbedKalturaIframe") as HTMLElement)
+      (document.querySelector(".mwEmbedKalturaIframe") as HTMLElement) ||
+      document.querySelector("video")?.parentElement
     );
   }
 

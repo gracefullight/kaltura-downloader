@@ -2,22 +2,34 @@
   "manifest_version": 3,
   "name": "Kaltura Downloader",
   "version": "1.0.0",
-  "description": "Download HLS videos from Kaltura (KAF) players",
+  "description": "Download HLS videos from Kaltura and Hotmart players",
   "permissions": ["webRequest"],
-  "host_permissions": ["*://*.kaltura.com/*"],
+  "host_permissions": [
+    "*://*.kaltura.com/*",
+    "*://*.hotmart.com/*",
+    "*://*.jimmyssempte.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["*://*.kaf.kaltura.com/*"],
+      "matches": [
+        "*://*.kaf.kaltura.com/*",
+        "*://*.hotmart.com/*",
+        "*://*.jimmyssempte.com/*"
+      ],
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_idle",
       "all_frames": true
     },
     {
-      "matches": ["*://*.kaf.kaltura.com/*"],
+      "matches": [
+        "*://*.kaf.kaltura.com/*",
+        "*://*.hotmart.com/*",
+        "*://*.jimmyssempte.com/*"
+      ],
       "js": ["downloader.js"],
       "run_at": "document_idle",
       "all_frames": true,

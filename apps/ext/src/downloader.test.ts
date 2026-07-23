@@ -9,7 +9,7 @@ vi.mock("./transmux.js", () => ({
 
 const mockParsePlaylist = vi.fn();
 vi.mock("./parser.js", () => ({
-  parseVariantPlaylist: mockParsePlaylist,
+  parseMediaPlaylist: mockParsePlaylist,
 }));
 
 // --- Mock browser globals ---
@@ -84,6 +84,10 @@ function waitForPosted(type: string, timeout = 2000): Promise<any> {
   );
 }
 
+function segment(url: string, sequence = 0): { url: string; sequence: number } {
+  return { url, sequence };
+}
+
 // --- Tests ---
 
 describe("downloader (page context)", () => {
@@ -126,7 +130,7 @@ describe("downloader (page context)", () => {
         });
 
       mockParsePlaylist.mockReturnValue([
-        "https://cdn.example.com/seg-1.ts",
+        segment("https://cdn.example.com/seg-1.ts"),
       ]);
 
       mockTransmux.mockResolvedValue(new Uint8Array([0x00, 0x01, 0x02]));
@@ -157,7 +161,7 @@ describe("downloader (page context)", () => {
           arrayBuffer: () => Promise.resolve(segmentData),
         });
 
-      mockParsePlaylist.mockReturnValue(["https://cdn.example.com/s.ts"]);
+      mockParsePlaylist.mockReturnValue([segment("https://cdn.example.com/s.ts")]);
       mockTransmux.mockResolvedValue(new Uint8Array([1]));
 
       sendMessage({
@@ -186,7 +190,7 @@ describe("downloader (page context)", () => {
           arrayBuffer: () => Promise.resolve(new ArrayBuffer(2)),
         });
 
-      mockParsePlaylist.mockReturnValue(["https://cdn.example.com/s.ts"]);
+      mockParsePlaylist.mockReturnValue([segment("https://cdn.example.com/s.ts")]);
       mockTransmux.mockResolvedValue(new Uint8Array([1]));
 
       sendMessage({
@@ -242,7 +246,7 @@ describe("downloader (page context)", () => {
         // 3 retries all fail
         .mockResolvedValue({ ok: false, status: 500 });
 
-      mockParsePlaylist.mockReturnValue(["https://cdn.example.com/s.ts"]);
+      mockParsePlaylist.mockReturnValue([segment("https://cdn.example.com/s.ts")]);
 
       sendMessage({
         type: "START_DOWNLOAD",
@@ -274,9 +278,9 @@ describe("downloader (page context)", () => {
         });
 
       mockParsePlaylist.mockReturnValue([
-        "https://cdn.example.com/s1.ts",
-        "https://cdn.example.com/s2.ts",
-        "https://cdn.example.com/s3.ts",
+        segment("https://cdn.example.com/s1.ts", 1),
+        segment("https://cdn.example.com/s2.ts", 2),
+        segment("https://cdn.example.com/s3.ts", 3),
       ]);
       mockTransmux.mockResolvedValue(new Uint8Array([0x00]));
 
@@ -291,6 +295,65 @@ describe("downloader (page context)", () => {
 
       // All 3 segment URLs fetched (+ 1 playlist fetch = 4 total)
       expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+
+    it("decrypts AES-128 segments before transmuxing", async () => {
+      const keyData = new Uint8Array(16);
+      keyData.fill(7);
+      const iv = new Uint8Array(16);
+      iv[15] = 2;
+      const plaintext = new Uint8Array(16);
+      plaintext.fill(0x47);
+      const encryptionKey = await crypto.subtle.importKey(
+        "raw",
+        keyData,
+        { name: "AES-CBC" },
+        false,
+        ["encrypt"],
+      );
+      const encrypted = await crypto.subtle.encrypt(
+        { name: "AES-CBC", iv },
+        encryptionKey,
+        plaintext,
+      );
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve("#EXTM3U\nencrypted.ts\n"),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(encrypted),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(keyData.buffer),
+        });
+
+      mockParsePlaylist.mockReturnValue([
+        {
+          ...segment("https://cdn.example.com/encrypted.ts", 2),
+          encryption: {
+            method: "AES-128",
+            keyUrl: "https://keys.example.com/video.key",
+            iv,
+          },
+        },
+      ]);
+      mockTransmux.mockResolvedValue(new Uint8Array([1]));
+
+      sendMessage({
+        type: "START_DOWNLOAD",
+        variantUrl: "https://cdn.example.com/v.m3u8",
+        filename: "encrypted.ts",
+      });
+
+      await waitForPosted("COMPLETE");
+
+      const transmuxInput = mockTransmux.mock.calls[0][0] as Uint8Array;
+      expect(Array.from(transmuxInput)).toEqual(Array.from(plaintext));
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
   });
 
