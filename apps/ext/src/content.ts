@@ -11,11 +11,57 @@ import type {
   CaptionReadyMessage,
   GetDownloadInfoResponse,
   ManifestReadyMessage,
+  ReportHotmartManifestRequest,
   Variant,
 } from "./types.js";
 
 const MSG_TO_PAGE = "kd-content";
 const MSG_FROM_PAGE = "kd-downloader";
+
+function reportHotmartManifests(): void {
+  const isHotmartFrame =
+    location.hostname === "hotmart.com" ||
+    location.hostname.endsWith(".hotmart.com");
+  if (!isHotmartFrame) return;
+
+  const reported = new Set<string>();
+  const report = (name: string): void => {
+    let url: URL;
+    try {
+      url = new URL(name);
+    } catch {
+      return;
+    }
+
+    const isHotmartHost =
+      url.hostname === "hotmart.com" || url.hostname.endsWith(".hotmart.com");
+    if (
+      !isHotmartHost ||
+      !url.pathname.toLowerCase().endsWith(".m3u8") ||
+      reported.has(url.href)
+    ) {
+      return;
+    }
+
+    reported.add(url.href);
+    const msg: ReportHotmartManifestRequest = {
+      type: "REPORT_HOTMART_MANIFEST",
+      url: url.href,
+    };
+    chrome.runtime.sendMessage(msg).catch(() => {});
+  };
+
+  for (const entry of performance.getEntriesByType("resource")) {
+    report(entry.name);
+  }
+
+  const observer = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) report(entry.name);
+  });
+  observer.observe({ type: "resource", buffered: true });
+}
+
+reportHotmartManifests();
 
 const entryIdMatch = location.pathname.match(/entryid\/([^/]+)/i);
 {

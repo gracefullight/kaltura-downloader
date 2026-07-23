@@ -5,7 +5,7 @@
  * permissions as the active HLS video player.
  */
 
-import { parseMediaPlaylist } from "./parser.js";
+import { parseMasterPlaylist, parseMediaPlaylist } from "./parser.js";
 import type { HlsSegment } from "./parser.js";
 import { transmuxTsToMp4 } from "./transmux.js";
 import type {
@@ -57,8 +57,22 @@ async function downloadHLS(variantUrl: string, filename: string): Promise<void> 
   const resp = await fetch(variantUrl);
   if (!resp.ok) throw new Error(`Playlist fetch failed: HTTP ${resp.status}`);
 
+  const playlistUrl = resp.url || variantUrl;
   const m3u8Text = await resp.text();
-  const segments = parseMediaPlaylist(m3u8Text, variantUrl);
+  let segments = parseMediaPlaylist(m3u8Text, playlistUrl);
+
+  if (segments.length === 0) {
+    const variants = parseMasterPlaylist(m3u8Text, playlistUrl);
+    const selected = variants[0];
+    if (selected) {
+      const mediaResp = await fetch(selected.url);
+      if (!mediaResp.ok) {
+        throw new Error(`Playlist fetch failed: HTTP ${mediaResp.status}`);
+      }
+      const mediaUrl = mediaResp.url || selected.url;
+      segments = parseMediaPlaylist(await mediaResp.text(), mediaUrl);
+    }
+  }
 
   if (segments.length === 0) {
     throw new Error("No segments found in playlist");

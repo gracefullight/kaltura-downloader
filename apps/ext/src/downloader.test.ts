@@ -8,7 +8,9 @@ vi.mock("./transmux.js", () => ({
 }));
 
 const mockParsePlaylist = vi.fn();
+const mockParseMaster = vi.fn();
 vi.mock("./parser.js", () => ({
+  parseMasterPlaylist: mockParseMaster,
   parseMediaPlaylist: mockParsePlaylist,
 }));
 
@@ -97,6 +99,8 @@ describe("downloader (page context)", () => {
     mockFetch.mockReset();
     mockTransmux.mockReset();
     mockParsePlaylist.mockReset();
+    mockParseMaster.mockReset();
+    mockParseMaster.mockReturnValue([]);
   });
 
   it("posts READY on module load", () => {
@@ -177,6 +181,50 @@ describe("downloader (page context)", () => {
 
       const phases = progressMessages.map((m: any) => m.phase);
       expect(phases).toContain("playlist");
+    });
+
+    it("resolves a master playlist before downloading segments", async () => {
+      const segmentData = new ArrayBuffer(4);
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          url: "https://cdn.example.com/master.m3u8",
+          text: () => Promise.resolve("#EXTM3U\n#EXT-X-STREAM-INF\nv.m3u8\n"),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          url: "https://cdn.example.com/v.m3u8",
+          text: () => Promise.resolve("#EXTM3U\nseg.ts\n"),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(segmentData),
+        });
+      mockParsePlaylist
+        .mockReturnValueOnce([])
+        .mockReturnValueOnce([segment("https://cdn.example.com/seg.ts")]);
+      mockParseMaster.mockReturnValue([
+        {
+          url: "https://cdn.example.com/v.m3u8",
+          bandwidth: 1000000,
+          resolution: "1280x720",
+          height: 720,
+          label: "720p",
+        },
+      ]);
+      mockTransmux.mockResolvedValue(new Uint8Array([1]));
+
+      sendMessage({
+        type: "START_DOWNLOAD",
+        variantUrl: "https://cdn.example.com/master.m3u8",
+        filename: "master.ts",
+      });
+
+      await waitForPosted("COMPLETE");
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        "https://cdn.example.com/v.m3u8",
+      );
     });
 
     it("converts .ts filename to .mp4", async () => {

@@ -22,6 +22,7 @@ const webRequestCbs: Array<{ cb: Listener; filter: any }> = [];
 let onInstalledCb: Listener;
 let onMessageCb: Listener;
 let onRemovedCb: Listener;
+const sessionStorage = new Map<string, unknown>();
 
 vi.stubGlobal("chrome", {
   runtime: {
@@ -40,6 +41,21 @@ vi.stubGlobal("chrome", {
     setIcon: vi.fn(),
     disable: vi.fn(),
     enable: vi.fn(),
+  },
+  storage: {
+    session: {
+      get: vi.fn(async () => Object.fromEntries(sessionStorage)),
+      set: vi.fn(async (items: Record<string, unknown>) => {
+        for (const [key, value] of Object.entries(items)) {
+          sessionStorage.set(key, structuredClone(value));
+        }
+      }),
+      remove: vi.fn(async (keys: string | string[]) => {
+        for (const key of Array.isArray(keys) ? keys : [keys]) {
+          sessionStorage.delete(key);
+        }
+      }),
+    },
   },
   webRequest: {
     onCompleted: {
@@ -92,6 +108,7 @@ function makeCaptionUrl(
 describe("background service worker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     mockParse.mockReturnValue([]);
     mockParseMedia.mockReturnValue([]);
     mockFetch.mockReset();
@@ -266,10 +283,47 @@ describe("background service worker", () => {
   });
 
   describe("Hotmart HLS interceptor", () => {
-    it("registers with the Hotmart m3u8 URL filter", () => {
+    it("registers with a Firefox-compatible Hotmart host filter", () => {
       expect(webRequestCbs[1].filter).toEqual({
-        urls: ["*://*.hotmart.com/*.m3u8*"],
+        urls: ["*://*.hotmart.com/*"],
       });
+    });
+
+    it("ignores non-manifest Hotmart requests captured by the broad filter", () => {
+      hotmartManifest()({
+        tabId: 50,
+        url: "https://vod-akm.play.hotmart.com/video/video123/hls/segment-1.ts",
+      });
+
+      expect(chrome.action.enable).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("exposes an intercepted manifest before asynchronous parsing completes", () => {
+      const manifestUrl =
+        "https://vod-akm.play.hotmart.com/video/fallback123/hls/master.m3u8?token=signed";
+      mockFetch.mockReturnValue(new Promise(() => {}));
+
+      hotmartManifest()({ tabId: 49, url: manifestUrl });
+
+      const sendResponse = vi.fn();
+      onMessageCb(
+        { type: "GET_DOWNLOAD_INFO", entryId: "" },
+        { tab: { id: 49 } },
+        sendResponse,
+      );
+
+      expect(sendResponse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ok: true,
+          variants: [
+            expect.objectContaining({
+              url: manifestUrl,
+              label: "HLS",
+            }),
+          ],
+        }),
+      );
     });
 
     it("stores a media playlist as a directly downloadable variant", async () => {
@@ -351,14 +405,17 @@ describe("background service worker", () => {
       expect(sendResponse).toHaveBeenCalledWith({ ok: false });
     });
 
-    it("returns ok: false when store has no entry", () => {
+    it("returns ok: false when store has no entry", async () => {
       const sendResponse = vi.fn();
-      onMessageCb(
+      const keepAlive = onMessageCb(
         { type: "GET_DOWNLOAD_INFO", entryId: "1_missing" },
         { tab: { id: 999 } },
         sendResponse,
       );
-      expect(sendResponse).toHaveBeenCalledWith({ ok: false });
+      expect(keepAlive).toBe(true);
+      await vi.waitFor(() => {
+        expect(sendResponse).toHaveBeenCalledWith({ ok: false });
+      });
     });
 
     it("returns ok: true with variants after manifest stored", async () => {
@@ -495,15 +552,73 @@ describe("background service worker", () => {
 
       // Close tab
       onRemovedCb(40);
+      await vi.waitFor(() => {
+        expect(chrome.storage.session.remove).toHaveBeenCalled();
+      });
 
       // Verify entry removed
       const resp2 = vi.fn();
-      onMessageCb(
+      const keepAlive = onMessageCb(
         { type: "GET_DOWNLOAD_INFO", entryId: "1_clean" },
         { tab: { id: 40 } },
         resp2,
       );
-      expect(resp2).toHaveBeenCalledWith({ ok: false });
+      expect(keepAlive).toBe(true);
+      await vi.waitFor(() => {
+        expect(resp2).toHaveBeenCalledWith({ ok: false });
+      });
+    });
+  });
+
+  describe("background restart recovery", () => {
+    it("restores Hotmart manifest data from session storage", async () => {
+      const manifestUrl =
+        "https://vod-akm.play.hotmart.com/video/restart123/hls/master.m3u8?token=signed";
+      mockParse.mockReturnValue([
+        {
+          url: "https://cdn.example.com/1080p.m3u8",
+          bandwidth: 3000000,
+          resolution: "1920x1080",
+          height: 1080,
+          label: "1080p",
+        },
+      ]);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        url: manifestUrl,
+        text: () => Promise.resolve("#EXTM3U\n"),
+      });
+
+      hotmartManifest()({ tabId: 60, url: manifestUrl });
+
+      await vi.waitFor(() => {
+        expect(chrome.storage.session.set).toHaveBeenCalled();
+      });
+
+      vi.resetModules();
+      await import("./background.js");
+
+      const sendResponse = vi.fn();
+      const keepAlive = onMessageCb(
+        { type: "GET_DOWNLOAD_INFO", entryId: "" },
+        { tab: { id: 60 } },
+        sendResponse,
+      );
+
+      expect(keepAlive).toBe(true);
+      await vi.waitFor(() => {
+        expect(sendResponse).toHaveBeenCalledWith(
+          expect.objectContaining({
+            ok: true,
+            variants: [
+              expect.objectContaining({
+                label: "1080p",
+                url: "https://cdn.example.com/1080p.m3u8",
+              }),
+            ],
+          }),
+        );
+      });
     });
   });
 });

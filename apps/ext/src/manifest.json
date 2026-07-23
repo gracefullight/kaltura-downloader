@@ -3,14 +3,23 @@
   "name": "Kaltura Downloader",
   "version": "1.0.0",
   "description": "Download HLS videos from Kaltura and Hotmart players",
-  "permissions": ["webRequest"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "kaltura-downloader@gracefullight.dev",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "permissions": ["storage", "webRequest"],
   "host_permissions": [
     "*://*.kaltura.com/*",
     "*://*.hotmart.com/*",
     "*://*.jimmyssempte.com/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
   },
   "content_scripts": [
     {

@@ -7,11 +7,99 @@ import type {
   GetDownloadInfoResponse,
   ManifestInfo,
   ManifestReadyMessage,
+  ReportHotmartManifestRequest,
   Variant,
 } from "./types.js";
 
 const store = new Map<string, ManifestInfo>();
 const captionStore = new Map<string, CaptionInfo[]>();
+const MANIFEST_STORAGE_PREFIX = "manifest:";
+const CAPTION_STORAGE_PREFIX = "captions:";
+
+function manifestStorageKey(key: string): string {
+  return `${MANIFEST_STORAGE_PREFIX}${key}`;
+}
+
+function captionStorageKey(tabId: number): string {
+  return `${CAPTION_STORAGE_PREFIX}${tabId}`;
+}
+
+async function persistManifest(key: string, info: ManifestInfo): Promise<void> {
+  try {
+    await chrome.storage.session.set({ [manifestStorageKey(key)]: info });
+  } catch {
+    // The in-memory cache remains usable if session storage is unavailable.
+  }
+}
+
+async function persistCaptions(
+  tabId: number,
+  captions: CaptionInfo[],
+): Promise<void> {
+  try {
+    await chrome.storage.session.set({
+      [captionStorageKey(tabId)]: captions,
+    });
+  } catch {
+    // The in-memory cache remains usable if session storage is unavailable.
+  }
+}
+
+async function restoreTabState(
+  tabId: number,
+  entryId: string,
+): Promise<{
+  info?: ManifestInfo;
+  captions: CaptionInfo[];
+}> {
+  try {
+    const stored = await chrome.storage.session.get(null);
+    const tabManifestPrefix = `${MANIFEST_STORAGE_PREFIX}${tabId}:`;
+    let info: ManifestInfo | undefined;
+
+    if (entryId) {
+      info = stored[manifestStorageKey(`${tabId}:${entryId}`)] as
+        | ManifestInfo
+        | undefined;
+    }
+    const hasExactMatch = info !== undefined;
+
+    for (const [storageKey, value] of Object.entries(stored)) {
+      if (!storageKey.startsWith(tabManifestPrefix)) continue;
+      const candidate = value as ManifestInfo;
+      const key = storageKey.slice(MANIFEST_STORAGE_PREFIX.length);
+      store.set(key, candidate);
+      if (
+        !hasExactMatch &&
+        (!info || candidate.timestamp > info.timestamp)
+      ) {
+        info = candidate;
+      }
+    }
+
+    const captions =
+      (stored[captionStorageKey(tabId)] as CaptionInfo[] | undefined) ?? [];
+    if (captions.length > 0) captionStore.set(String(tabId), captions);
+
+    return { info, captions };
+  } catch {
+    return { captions: [] };
+  }
+}
+
+async function clearStoredTabState(tabId: number): Promise<void> {
+  try {
+    const stored = await chrome.storage.session.get(null);
+    const tabManifestPrefix = `${MANIFEST_STORAGE_PREFIX}${tabId}:`;
+    const keys = Object.keys(stored).filter(
+      (key) =>
+        key.startsWith(tabManifestPrefix) || key === captionStorageKey(tabId),
+    );
+    if (keys.length > 0) await chrome.storage.session.remove(keys);
+  } catch {
+    // Session data expires with the browser session if cleanup fails.
+  }
+}
 
 // --- Icon: disabled by default, activated per-tab on manifest detection ---
 
@@ -53,31 +141,60 @@ chrome.webRequest.onCompleted.addListener(
 
 // --- Intercept standard Hotmart HLS manifests ---
 
+function handleHotmartManifest(tabId: number, url: string): void {
+  let requestUrl: URL;
+  try {
+    requestUrl = new URL(url);
+  } catch {
+    return;
+  }
+
+  const isHotmartHost =
+    requestUrl.hostname === "hotmart.com" ||
+    requestUrl.hostname.endsWith(".hotmart.com");
+  if (
+    !isHotmartHost ||
+    !["http:", "https:"].includes(requestUrl.protocol) ||
+    !requestUrl.pathname.toLowerCase().endsWith(".m3u8")
+  ) {
+    return;
+  }
+
+  const entryId = requestUrl.pathname.match(/\/video\/([^/]+)\//)?.[1];
+  if (!entryId) return;
+
+  const key = `${tabId}:${entryId}`;
+  let info = store.get(key);
+  if (info) {
+    info.timestamp = Date.now();
+    info.masterUrl = url;
+  } else {
+    info = {
+      entryId,
+      partnerId: "hotmart",
+      masterUrl: url,
+      variants: [],
+      timestamp: Date.now(),
+    };
+    store.set(key, info);
+  }
+
+  // Persist an immediately usable fallback before starting asynchronous
+  // parsing. Firefox event backgrounds may be suspended after this listener
+  // returns, and the page-context downloader can resolve a master playlist.
+  mergeDirectVariant(info.variants, createDirectVariant(url));
+  void persistManifest(key, info);
+
+  chrome.action.enable(tabId);
+  void fetchAndParseMaster(key, url, tabId, entryId);
+}
+
 chrome.webRequest.onCompleted.addListener(
   (details) => {
     if (details.tabId === -1) return;
-
-    const entryId = details.url.match(/\/video\/([^/]+)\//)?.[1];
-    if (!entryId) return;
-
-    const key = `${details.tabId}:${entryId}`;
-    const existing = store.get(key);
-    if (existing) {
-      existing.timestamp = Date.now();
-    } else {
-      store.set(key, {
-        entryId,
-        partnerId: "hotmart",
-        masterUrl: details.url,
-        variants: [],
-        timestamp: Date.now(),
-      });
-    }
-
-    chrome.action.enable(details.tabId);
-    fetchAndParseMaster(key, details.url, details.tabId, entryId);
+    handleHotmartManifest(details.tabId, details.url);
   },
-  { urls: ["*://*.hotmart.com/*.m3u8*"] },
+  { urls: ["*://*.hotmart.com/*"] },
 );
 
 // --- Intercept caption/subtitle WebVTT requests ---
@@ -105,6 +222,7 @@ chrome.webRequest.onCompleted.addListener(
 
     existing.push({ captionAssetId, ks, baseUrl, serveUrl });
     captionStore.set(tabKey, existing);
+    void persistCaptions(details.tabId, existing);
 
     const msg: CaptionReadyMessage = {
       type: "CAPTION_READY",
@@ -143,6 +261,7 @@ async function fetchAndParseMaster(
       mergeDirectVariant(info.variants, createDirectVariant(resp.url));
     }
     info.finalUrl = resp.url;
+    await persistManifest(key, info);
 
     const msg: ManifestReadyMessage = {
       type: "MANIFEST_READY",
@@ -188,10 +307,30 @@ function mergeDirectVariant(variants: Variant[], direct: Variant): void {
 
 chrome.runtime.onMessage.addListener(
   (
-    msg: GetDownloadInfoRequest,
+    msg: GetDownloadInfoRequest | ReportHotmartManifestRequest,
     sender: chrome.runtime.MessageSender,
     sendResponse: (response: GetDownloadInfoResponse) => void,
   ) => {
+    if (msg.type === "REPORT_HOTMART_MANIFEST") {
+      const tabId = sender.tab?.id;
+      if (tabId == null || !sender.url) return;
+
+      try {
+        const senderHost = new URL(sender.url).hostname;
+        if (
+          senderHost !== "hotmart.com" &&
+          !senderHost.endsWith(".hotmart.com")
+        ) {
+          return;
+        }
+      } catch {
+        return;
+      }
+
+      handleHotmartManifest(tabId, msg.url);
+      return;
+    }
+
     if (msg.type !== "GET_DOWNLOAD_INFO") return;
 
     const tabId = sender.tab?.id;
@@ -203,8 +342,25 @@ chrome.runtime.onMessage.addListener(
     const exact = msg.entryId ? store.get(`${tabId}:${msg.entryId}`) : undefined;
     const info = exact ?? findLatestManifest(tabId);
     if (!info || info.variants.length === 0) {
-      sendResponse({ ok: false });
-      return;
+      void restoreTabState(tabId, msg.entryId).then((restored) => {
+        if (!restored.info || restored.info.variants.length === 0) {
+          sendResponse({ ok: false });
+          return;
+        }
+
+        sendResponse({
+          ok: true,
+          masterUrl: restored.info.masterUrl,
+          variants: restored.info.variants.map((v) => ({
+            url: v.url,
+            label: v.label,
+            resolution: v.resolution,
+            bandwidth: v.bandwidth,
+          })),
+          captions: restored.captions,
+        });
+      });
+      return true;
     }
 
     const captions = captionStore.get(String(tabId)) ?? [];
@@ -239,4 +395,5 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     if (key.startsWith(`${tabId}:`)) store.delete(key);
   }
   captionStore.delete(String(tabId));
+  void clearStoredTabState(tabId);
 });

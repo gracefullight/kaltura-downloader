@@ -39,6 +39,11 @@ export interface GetDownloadInfoRequest {
   entryId: string;
 }
 
+export interface ReportHotmartManifestRequest {
+  type: "REPORT_HOTMART_MANIFEST";
+  url: string;
+}
+
 export interface GetDownloadInfoResponse {
   ok: boolean;
   masterUrl?: string;
