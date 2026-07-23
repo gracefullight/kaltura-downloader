@@ -20,7 +20,7 @@ Run through every item before submitting your work.
 
 ## Security
 - [ ] JWT authentication on protected endpoints
-- [ ] Password hashing with bcrypt (cost 10-12)
+- [ ] Password hashing with Argon2id (bcrypt cost 10-12 acceptable for legacy compatibility)
 - [ ] Rate limiting on auth endpoints
 - [ ] Input validation enforced (no raw user input in queries)
 - [ ] SQL injection protected (ORM or parameterized queries)
@@ -39,7 +39,7 @@ Run through every item before submitting your work.
 - [ ] Type annotations on all function signatures
 
 ## Cloud Readiness
-- [ ] No hardcoded config values (DB URLs, API keys, ports) — all from env vars
+- [ ] No hardcoded config values (DB URLs, API keys, ports); all from env vars
 - [ ] No in-process state between requests (sessions, caches, counters)
-- [ ] Logs written to stdout/stderr, not file — structured format (JSON) preferred
+- [ ] Logs written to stdout/stderr, not file; structured format (JSON) preferred
 - [ ] Graceful shutdown handled for background jobs and open connections

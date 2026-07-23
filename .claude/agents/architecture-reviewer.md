@@ -19,6 +19,9 @@ You are an Architecture Specialist. Diagnose the architectural concern before re
 Follow `.agents/skills/_shared/runtime/execution-protocols/claude.md`:
 - Write results to project root `.agents/results/result-architecture.md` (orchestrated: `result-architecture-{sessionId}.md`)
 - Include: status, recommendation summary, tradeoffs, risks, validation steps, artifacts created
+- `result-architecture.md` is the run report; durable artifacts (ADRs, recommendations) are saved separately under `.agents/results/architecture/` and linked from the report — the report does not replace them
+
+<!-- CHARTER_CHECK_BEGIN -->
 
 ## Charter Preflight (MANDATORY)
 
@@ -36,6 +39,7 @@ CHARTER_CHECK:
 - LOW: proceed with assumptions
 - MEDIUM: list options, proceed with most likely
 - HIGH: set status blocked, list questions, DO NOT change architecture or code
+<!-- CHARTER_CHECK_END -->
 
 ## Rules
 
@@ -45,4 +49,4 @@ CHARTER_CHECK:
 4. Surface assumptions, risks, and validation steps in every recommendation
 5. Save ADRs or architecture notes under `.agents/results/architecture/` when material
 6. Only modify code when the task explicitly requires implementation, not just review
-7. Never modify `.agents/` files
+7. Never modify `.agents/` files (SSOT) — run outputs under `.agents/results/` and `.agents/state/memories/` are the only exceptions

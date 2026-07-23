@@ -77,3 +77,106 @@
 - lib/features/notes/data/repositories/note_sync_repository.dart
 - lib/core/sync/sync_queue.dart
 ```
+
+---
+
+## Example 4: Swift Native iOS — Todo List Screen
+
+**Platform**: Swift iOS Native (SwiftUI + `@Observable` + `swift-openapi-generator`)
+
+**Input**: "Create a native iOS todo list screen that fetches todos from the API and supports pull-to-refresh"
+
+**Output**:
+```
+## Task: Swift Native Todo List Screen (iOS 17+)
+
+### Implementation
+- State: @MainActor @Observable TodosViewModel with TodosViewState enum (idle/loading/loaded/empty/error)
+- Networking: TodoService wrapping the generated Client from swift-openapi-generator
+- View: SwiftUI TodosView switching over TodosViewState; pull-to-refresh via .refreshable
+- Tests: XCTest unit tests for the view model using a protocol-based mock service
+
+### Platform Support
+- [x] iOS 17.0+ (Observation framework requires iOS 17)
+- [x] Dark mode (SwiftUI adaptive colors)
+- [x] Dynamic Type (List / Label respect system font scaling)
+
+### Project Layout (App/Core/Features/Shared)
+Features/
+  Todos/
+    TodosView.swift             # SwiftUI view — owns the @Observable VM via @State
+    TodosViewModel.swift        # @Observable; drives loading/error/empty/data states
+Core/
+  Networking/
+    openapi.yaml                # Vendored OpenAPI spec; source of truth for generator
+    openapi-generator-config.yaml
+    APIClient.swift             # Wraps generated Client; URLSession transport + auth
+    TodoProviding.swift         # Protocol seam the VM depends on (mockable)
+    TodoService.swift           # Cached repository: generated Client + ResponseCache
+  Cache/
+    ResponseCache.swift         # actor over hyperoslo/Cache; read-through + invalidation
+App/
+  MyApp.swift                   # @main; instantiates AppDependencies
+  AppDependencies.swift         # Composition root; injects TodoService into TodosView
+Tests/
+  TodosViewModelTests.swift     # XCTest; MockTodoService conforms to TodoProviding
+
+### Files Created
+- Sources/Features/Todos/TodosViewModel.swift
+- Sources/Features/Todos/TodosView.swift
+- Sources/Core/Networking/TodoProviding.swift
+- Sources/Core/Networking/TodoService.swift
+- Sources/Core/Networking/APIClient.swift
+- Sources/Core/Cache/ResponseCache.swift
+- Sources/App/AppDependencies.swift
+- Tests/TodosViewModelTests.swift
+
+### Key Patterns
+- @MainActor @Observable replaces ObservableObject/@Published — no Combine dependency,
+  and all state mutation is main-actor-isolated (Swift 6 strict-concurrency clean)
+- View holds VM with @State (not @StateObject); init via State(wrappedValue:)
+- .task { await viewModel.load() } cancels automatically when view disappears —
+  structured cancellation, no deinit-based cleanup (nonisolated deinit cannot
+  touch @MainActor state under Swift 6)
+- TodoService calls the generated client — never hand-rolled URLRequest
+- Read-through cache at the repository layer: ResponseCache (hyperoslo/Cache) wraps
+  the generated Client; reads are stale-while-revalidate, writes invalidate keys
+- VM depends on TodoProviding (protocol seam), so MockTodoService needs no mock lib
+```
+
+---
+
+## Example 5: React Native — Offline-Ready Todo List
+
+**Platform**: React Native (TypeScript strict + TanStack Query 5 + Zustand 5 + React Navigation v7)
+
+**Input**: "Create a todo list screen that works offline and syncs when back online"
+
+**Output**:
+```
+## Task: RN Offline-Ready Todo List
+
+### Implementation
+- Server state: TanStack Query hooks (useTodosQuery / useToggleTodo) with shared todoKeys factory
+- Persistence: MMKV persister via PersistQueryClientProvider (gcTime 24h = maxAge)
+- Connectivity: onlineManager wired to NetInfo; paused mutations resume on reconnect
+- Auth: token in Zustand authStore, hydrated from react-native-keychain at bootstrap
+- Screen: TodosScreen consumes hooks only — no direct axios; loading/error/empty/data states
+
+### Files Created
+- src/api/client.ts            # axios + auth/401 interceptors
+- src/api/queryClient.ts       # QueryClient + MMKV persister + onlineManager
+- src/features/todos/queries.ts
+- src/features/todos/mutations.ts
+- src/features/todos/ui/TodosScreen.tsx
+- src/store/authStore.ts       # Zustand; keychain-hydrated token
+- src/shared/utils/storage.ts  # MMKV instance (non-secret data only)
+- e2e/todos.yaml               # Maestro critical flow
+- src/features/todos/__tests__/queries.test.tsx
+
+### Key Patterns
+- Screens never import axios — TanStack Query hooks are the repository layer
+- Explicit staleTime/gcTime on every query; mutations invalidate list + detail keys
+- Optimistic updates roll back on error; never fabricate a cache entry when none exists
+- Secrets in keychain, never plain MMKV; MMKV holds only the query-cache snapshot
+```

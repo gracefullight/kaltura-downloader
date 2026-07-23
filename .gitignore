@@ -5,3 +5,9 @@ dist/
 .claude/settings.local.json
 .agents/results/
 .agents/state/
+
+# oh-my-agent runtime (local artifacts — do not commit)
+.antigravitycli/
+.agents/backup/
+docs/plans/
+.migration-backup/

@@ -13,6 +13,8 @@ Follow the vendor-specific execution protocol:
 - Write results to project root `.agents/results/result-tf-infra.md` (orchestrated: `result-tf-infra-{sessionId}.md`)
 - Include: status, summary, files changed, validation results, plan/apply notes, acceptance checklist
 
+<!-- CHARTER_CHECK_BEGIN -->
+
 ## Charter Preflight (MANDATORY)
 
 Before ANY infrastructure changes, output this block:
@@ -29,6 +31,7 @@ CHARTER_CHECK:
 - LOW: proceed with assumptions
 - MEDIUM: list options, proceed with most likely
 - HIGH: set status blocked, list questions, DO NOT apply destructive changes
+<!-- CHARTER_CHECK_END -->
 
 ## Rules
 
@@ -39,4 +42,4 @@ CHARTER_CHECK:
 5. Do not hardcode secrets in `.tf` files or examples
 6. Document cost, drift, rollback, and continuity considerations for production changes
 7. Never run destructive operations without explicit user approval
-8. Never modify `.agents/` files
+8. Never modify `.agents/` files (SSOT) — run outputs under `.agents/results/` and `.agents/state/memories/` are the only exceptions

@@ -1,8 +1,10 @@
 ---
-description: Software architecture workflow — diagnose architecture problems, select the right analysis method, compare options, synthesize stakeholder input, and produce a recommendation, review, or ADR
+name: architecture
+description: Software architecture workflow that diagnoses architecture problems, selects the right analysis method, compares options, synthesizes stakeholder input, and produces a recommendation, review, or ADR
+disable-model-invocation: true
 ---
 
-# MANDATORY RULES — VIOLATION IS FORBIDDEN
+# MANDATORY RULES: VIOLATION IS FORBIDDEN
 
 - **Response language follows `language` setting in `.agents/oma-config.yaml` if configured.**
 - **NEVER skip steps.** Execute from Step 1 in order.
@@ -10,13 +12,19 @@ description: Software architecture workflow — diagnose architecture problems, 
 - **You MUST use MCP tools throughout the workflow.**
   - Use code analysis tools (`get_symbols_overview`, `find_symbol`, `find_referencing_symbols`, `search_for_pattern`) to inspect the current architecture.
   - Use memory tools (write/edit) to record architecture outputs.
-  - Memory path: configurable via `memoryConfig.basePath` (default: `.serena/memories`)
-  - Tool names: configurable via `memoryConfig.tools` in `mcp.json`
+  - Memory path: configurable via `memoryConfig.basePath` (default: `.agents/state/memories`)
+  - Tool names: configurable via `memoryConfig.tools` in `.agents/mcp.json`
   - Do NOT use raw file reads or grep as substitutes when MCP tools are available.
 
 ---
 
 > **Vendor note:** This workflow executes inline. Use `.agents/skills/oma-architecture/SKILL.md` and its resources as the primary reference for method selection, stakeholder synthesis, and output format.
+
+---
+
+## L1 Decision Events
+
+Emit required L1 decisions by calling `oma state:emit` directly, as documented in `.agents/skills/_shared/runtime/event-spec.md`.
 
 ---
 
@@ -42,6 +50,8 @@ If the problem is vague, start in Diagnostic Mode.
 ## Step 2: Analyze the Existing System
 
 // turbo
+Read prior decisions in `.agents/results/architecture/` first — new decisions supersede old ones explicitly (update the old ADR's `Status`), never contradict them silently.
+
 Use MCP code analysis tools to understand the current architecture:
 - `get_symbols_overview` for project structure and boundaries
 - `find_symbol` and `find_referencing_symbols` for ownership and coupling
@@ -90,13 +100,13 @@ Requirements:
 For cross-cutting decisions, read:
 - `.agents/skills/oma-architecture/resources/stakeholder-synthesis.md`
 
-Consult only the agents that matter to the decision:
-- `oma-pm` for business scope and priorities
-- `oma-backend` for service/API/domain tradeoffs
-- `oma-db` for data ownership and consistency
-- `oma-tf-infra` for deployment and operational architecture
-- `oma-qa` for security, performance, and testability risks
-- `oma-frontend` / `oma-mobile` for client complexity and integration impact
+Consult only the agents that matter to the decision (agent ids per the mapping table in `.agents/workflows/orchestrate.md`):
+- `pm` for business scope and priorities
+- `backend` for service/API/domain tradeoffs
+- `db` for data ownership and consistency
+- `tf-infra` for deployment and operational architecture
+- `qa` for security, performance, and testability risks
+- `frontend` / `mobile` for client complexity and integration impact
 
 Do not turn consultation into consensus theater. Synthesize and recommend explicitly.
 
@@ -123,11 +133,21 @@ If the decision remains user-owned, present the options with clear tradeoffs rat
 // turbo
 Save the architecture artifact to `.agents/results/architecture/`.
 
-Suggested filenames:
+Suggested filenames (kebab-case topic, no sequence numbers):
+- `adr-<topic>.md`
 - `architecture-recommendation-<topic>.md`
 - `architecture-review-<topic>.md`
-- `adr-<topic>.md`
 - `cbam-<topic>.md`
+- `diagnosis-<topic>.md`
+
+ADR lifecycle: set `Status` (`Proposed` / `Accepted` / `Superseded by <adr-file>`); when replacing an old ADR, update its `Status` in the same run.
+
+Emit and verify the required ADR/architecture completion decision:
+
+```bash
+oma state:emit "decision.made" '{"subject":"architecture.adr-complete","decision":"Use the completed architecture recommendation or ADR as the handoff basis.","rationale":"The architecture artifact captures the selected option, tradeoffs, risks, and validation steps."}'
+oma state:verify --workflow architecture --checkpoint adr-complete
+```
 
 Then guide the next step:
 - if approved and implementation is next: suggest `/plan`

@@ -30,14 +30,14 @@
 Delegate to the native CLI: `oma search fetch <url>`. The pipeline
 auto-escalates through four strategies and stops on the first success:
 
-- **api** — platform-specific handlers (Twitter syndication, Reddit JSON,
+- **api**: platform-specific handlers (Twitter syndication, Reddit JSON,
   HN Firebase, arXiv Atom, SE v2.3, Bluesky AT Protocol, Mastodon, Wikipedia,
   CrossRef, OpenLibrary, Lobste.rs, dev.to, V2EX, npm, PyPI, Naver blog/finance).
-- **probe** — parallel Jina Reader + WebFetch + curl UA variants (first-wins).
-- **impersonate** — Python `curl_cffi` subprocess (safari→chrome→firefox;
+- **probe**: parallel Jina Reader + WebFetch + curl UA variants (first-wins).
+- **impersonate**: Python `curl_cffi` subprocess (safari→chrome→firefox;
   Korean hosts prefer safari). Auto-skips remaining TLS targets on
   JS-essential markers.
-- **browser** — `puppeteer-core` + system Chrome via CDP. No MCP runtime
+- **browser**: `puppeteer-core` + system Chrome via CDP. No MCP runtime
   dependency. Install Chrome or set `OMA_CHROME_PATH`.
 
 Sidecar: add `--include-archive` to try AMP → archive.today → Wayback
@@ -49,12 +49,11 @@ Flags: `--only <list>`, `--skip <list>`, `--timeout <sec>`, `--locale <v>`,
 5=auth-required, 6=timeout, 1=error.
 
 ### code route
-1. Detect platform from user-provided URL or context:
-   - URL contains `github.com` -> use `gh search code "query"`
-   - URL contains `gitlab.com` -> use `glab api "/search?scope=blobs&search=query"`
-   - No URL (keyword only) -> use `gh search code` (default, largest OSS coverage)
-   - `--gitlab` flag -> force `glab api`
-2. Parse CLI output into structured results
+1. Use the CLI wrapper: `oma search code "<query>"` (wraps `gh search code` / `glab api`)
+   - URL contains `gitlab.com` or `--gitlab` flag -> add `--host gitlab`
+   - Optional filters: `--language <lang>`, `--repo <owner/repo>`, `--limit <n>`
+   - No URL (keyword only) -> default host is github (largest OSS coverage)
+2. Parse the JSON output into structured results
 3. Include repo name, file path, and match context
 
 ### local route
@@ -79,8 +78,8 @@ Do NOT duplicate Serena's functionality. Simply pass through.
 1. For each result with a URL, extract the domain
 2. Resolve trust score (see `resources/trust-registry.md`):
    a. Check Serena memory cache (`trust-registry-cache`)
-   b. If cache miss: apply heuristic pattern matching (domain patterns → category + score)
-   c. If heuristic returns unknown: call Tranco API (`siterank.redirect2.me`) for validation
+   b. If cache miss: run `oma search trust <domain>` (registry → heuristic → Tranco, handled inside the CLI)
+   c. Apply agent-level rules: Context7-resolved docs are `verified 0.95`; official-site upgrade is allowed (upgrade-only)
 3. Attach trust level, tags, and score:
    - Resolved: use level and score
    - Unresolved: label as `unknown` with score `—`
