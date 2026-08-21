@@ -1,0 +1,85 @@
+name: Update Firefox Add-ons Listing
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-listing:
+    name: Update AMO listing details
+    runs-on: ubuntu-latest
+    env:
+      AMO_API_KEY: ${{ secrets.FIREFOX_AMO_API_KEY }}
+      AMO_API_SECRET: ${{ secrets.FIREFOX_AMO_API_SECRET }}
+      AMO_ADDON: kaltura-downloader
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Create AMO authorization token
+        id: amo-auth
+        shell: bash
+        run: |
+          token="$(node <<'NODE'
+          const crypto = require('node:crypto');
+
+          const encode = (value) => Buffer.from(value).toString('base64url');
+          const now = Math.floor(Date.now() / 1000);
+          const header = encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+          const payload = encode(JSON.stringify({
+            iss: process.env.AMO_API_KEY,
+            jti: crypto.randomUUID(),
+            iat: now,
+            exp: now + 60,
+          }));
+          const signature = crypto
+            .createHmac('sha256', process.env.AMO_API_SECRET)
+            .update(`${header}.${payload}`)
+            .digest('base64url');
+
+          process.stdout.write(`${header}.${payload}.${signature}`);
+          NODE
+          )"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Update AMO metadata
+        env:
+          AMO_TOKEN: ${{ steps.amo-auth.outputs.token }}
+        run: |
+          payload="$(jq -c '{description, homepage, contributions_url, tags}' apps/ext/amo-metadata.json)"
+          curl --fail-with-body --request PATCH \
+            "https://addons.mozilla.org/api/v5/addons/addon/$AMO_ADDON/" \
+            --header "Authorization: JWT $AMO_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data "$payload"
+
+      - name: Upload AMO product icon
+        env:
+          AMO_TOKEN: ${{ steps.amo-auth.outputs.token }}
+        run: |
+          curl --fail-with-body --request PATCH \
+            "https://addons.mozilla.org/api/v5/addons/addon/$AMO_ADDON/" \
+            --header "Authorization: JWT $AMO_TOKEN" \
+            --form 'icon=@apps/ext/assets/icon-128.png;type=image/png'
+
+      - name: Upload default screenshot when none exists
+        env:
+          AMO_TOKEN: ${{ steps.amo-auth.outputs.token }}
+        run: |
+          preview_count="$(curl --fail-with-body \
+            "https://addons.mozilla.org/api/v5/addons/addon/$AMO_ADDON/" \
+            --header "Authorization: JWT $AMO_TOKEN" | jq '.previews | length')"
+
+          if [ "$preview_count" -gt 0 ]; then
+            echo "Keeping $preview_count existing AMO screenshot(s)."
+            exit 0
+          fi
+
+          curl --fail-with-body --request POST \
+            "https://addons.mozilla.org/api/v5/addons/addon/$AMO_ADDON/previews/" \
+            --header "Authorization: JWT $AMO_TOKEN" \
+            --form 'image=@apps/ext/assets/screenshot-1280x800.png;type=image/png' \
+            --form 'position=0'

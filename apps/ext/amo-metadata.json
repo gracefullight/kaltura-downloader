@@ -2,9 +2,20 @@
   "summary": {
     "en-US": "Download HLS videos from Kaltura and Hotmart players."
   },
+  "description": {
+    "en-US": "Download HLS videos from Kaltura (KAF) and Hotmart players. Select video quality, download AES-128 encrypted HLS streams, download subtitles, and convert MPEG-TS files to MP4."
+  },
   "categories": [
     "other"
   ],
+  "tags": [
+    "video downloader",
+    "download"
+  ],
+  "homepage": {
+    "en-US": "https://github.com/gracefullight/kaltura-downloader"
+  },
+  "contributions_url": "https://github.com/sponsors/gracefullight",
   "version": {
     "license": "MIT"
   }
