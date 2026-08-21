@@ -34,6 +34,18 @@ bun run build
 
 `apps/ext/dist/` 폴더를 Chrome에 로드합니다.
 
+### Firefox Add-ons 배포
+
+Firefox Add-ons(AMO)는 제출용 ZIP을 받고 Mozilla가 서명된 `.xpi`를 발급합니다. 제출 ZIP을 만들려면 Node.js 22 이상이 필요합니다.
+
+```bash
+bun run build:firefox
+```
+
+결과 파일은 `apps/ext/artifacts/firefox/kaltura-downloader-firefox-<version>.zip`입니다. 이 파일을 [Firefox Add-ons 개발자 허브](https://addons.mozilla.org/developers/)에 업로드하거나, GitHub Actions 릴리스 자동 제출을 사용할 수 있습니다.
+
+자동 제출에는 저장소 Actions secrets에 `FIREFOX_AMO_API_KEY`와 `FIREFOX_AMO_API_SECRET`을 설정해야 합니다. 둘 다 Mozilla Add-ons 개발자 허브에서 만든 API 자격 증명이며, 설정 후 다음 릴리스부터 AMO의 공개(`listed`) 채널로 제출됩니다. 서명과 심사가 완료되면 사용자는 AMO에서 확장 프로그램을 설치합니다.
+
 ## 사용법
 
 1. KAF Kaltura 페이지 접속

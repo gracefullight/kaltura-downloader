@@ -31,11 +31,19 @@ jobs:
     needs: [lint, test]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bun run build
+      - run: bun run build:firefox
       - uses: actions/upload-artifact@v4
         with:
           name: ext-dist
           path: apps/ext/dist/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firefox-amo-upload
+          path: apps/ext/artifacts/firefox/*.zip
           retention-days: 30

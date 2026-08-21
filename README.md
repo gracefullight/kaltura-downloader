@@ -34,6 +34,18 @@ bun run build
 
 Load `apps/ext/dist/` in Chrome.
 
+### Firefox Add-ons distribution
+
+Firefox Add-ons (AMO) accepts a submission ZIP and Mozilla issues the signed `.xpi`. Building the AMO upload package requires Node.js 22 or later:
+
+```bash
+bun run build:firefox
+```
+
+The output is `apps/ext/artifacts/firefox/kaltura-downloader-firefox-<version>.zip`. Upload it through the [Firefox Add-ons Developer Hub](https://addons.mozilla.org/developers/), or use the automated GitHub Actions release submission.
+
+For automatic submission, add `FIREFOX_AMO_API_KEY` and `FIREFOX_AMO_API_SECRET` as repository Actions secrets. They are API credentials created in the Mozilla Add-ons Developer Hub. Subsequent releases are submitted to AMO's public (`listed`) channel; users install the extension from AMO once Mozilla has signed and approved it.
+
 ## Usage
 
 1. Navigate to a KAF Kaltura page

@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "tsup --watch",
     "build": "tsup",
+    "firefox:lint": "npx --yes web-ext@10.6.0 lint --source-dir=dist",
+    "firefox:package": "npx --yes web-ext@10.6.0 build --source-dir=dist --artifacts-dir=artifacts/firefox --filename=kaltura-downloader-firefox-{version}.zip --overwrite-dest",
+    "build:firefox": "bun run build && bun run firefox:lint && bun run firefox:package",
     "test": "vitest run",
     "test:watch": "vitest"
   },

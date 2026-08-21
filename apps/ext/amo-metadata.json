@@ -1,0 +1,11 @@
+{
+  "summary": {
+    "en-US": "Download HLS videos from Kaltura and Hotmart players."
+  },
+  "categories": [
+    "other"
+  ],
+  "version": {
+    "license": "MIT"
+  }
+}
