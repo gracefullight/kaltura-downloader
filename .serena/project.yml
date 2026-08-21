@@ -2,7 +2,6 @@ languages:
 - typescript
 - dart
 - terraform
-- python
 
 
 # the encoding used by text files in the project
