@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/gracefullight/kaltura-downloader/compare/ext-v1.3.0...ext-v1.3.1) (2026-08-21)
+
+
+### Bug Fixes
+
+* **amo:** populate Firefox listing assets ([ba5c378](https://github.com/gracefullight/kaltura-downloader/commit/ba5c378471d265938d6f5036c6b22c8e4a385c94))
+
 ## [1.3.0](https://github.com/gracefullight/kaltura-downloader/compare/ext-v1.2.0...ext-v1.3.0) (2026-08-21)
 
 
