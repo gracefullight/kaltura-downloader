@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0](https://github.com/gracefullight/kaltura-downloader/compare/ext-v1.2.0...ext-v1.3.0) (2026-08-21)
+
+
+### Features
+
+* **ext:** support encrypted Hotmart HLS streams ([39491eb](https://github.com/gracefullight/kaltura-downloader/commit/39491eb85bd37e1ef7bdbca68cc07e2310d5b614))
+
+
+### Bug Fixes
+
+* **ext:** handle Hotmart encrypted HLS streams ([6e3a4d6](https://github.com/gracefullight/kaltura-downloader/commit/6e3a4d666633944ab3d12b2cfaeaaec5d6f41222))
+* **ext:** support Firefox Hotmart manifest detection ([37cefec](https://github.com/gracefullight/kaltura-downloader/commit/37cefecfc393b60ce0907b1718ad7535efd57329))
+
 ## [1.2.0](https://github.com/gracefullight/kaltura-downloader/compare/ext-v1.1.0...ext-v1.2.0) (2026-04-20)
 
 
