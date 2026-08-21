@@ -67,6 +67,8 @@ export interface StartDownloadMessage extends PageMessage {
   type: "START_DOWNLOAD";
   variantUrl: string;
   filename: string;
+  /** Master playlist URL — used to inherit EXT-X-SESSION-KEY for media variants. */
+  masterUrl?: string;
 }
 
 export interface AbortMessage extends PageMessage {

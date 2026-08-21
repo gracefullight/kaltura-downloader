@@ -34,11 +34,55 @@ vi.mock("mux.js", () => {
   };
 });
 
-import { transmuxTsToMp4 } from "./transmux.js";
+import { isMpegTs, transmuxTsToMp4 } from "./transmux.js";
+
+describe("isMpegTs", () => {
+  it("accepts buffers that start with sync byte 0x47", () => {
+    expect(isMpegTs(new Uint8Array([0x47, 0x00, 0x01]))).toBe(true);
+  });
+
+  it("rejects empty or non-TS heads (encrypted / wrong container)", () => {
+    expect(isMpegTs(new Uint8Array([]))).toBe(false);
+    expect(isMpegTs(new Uint8Array([0x00, 0x47]))).toBe(false);
+    // Typical AES ciphertext does not start with 0x47 on packet boundaries
+    const fakeCipher = new Uint8Array(188 * 2);
+    fakeCipher.fill(0xab);
+    expect(isMpegTs(fakeCipher)).toBe(false);
+  });
+
+  it("requires sync byte on each 188-byte packet boundary", () => {
+    const good = new Uint8Array(188 * 2);
+    good[0] = 0x47;
+    good[188] = 0x47;
+    expect(isMpegTs(good)).toBe(true);
+
+    const bad = new Uint8Array(good);
+    bad[188] = 0x00;
+    expect(isMpegTs(bad)).toBe(false);
+  });
+});
 
 describe("transmuxTsToMp4", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("rejects non-MPEG-TS input before invoking mux.js", async () => {
+    const muxjs = await import("mux.js");
+    const Transmuxer = (muxjs as any).default.mp4.Transmuxer;
+    const ciphertextLike = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+
+    await expect(transmuxTsToMp4(ciphertextLike)).rejects.toThrow(
+      "Input is not MPEG-TS",
+    );
+    expect(Transmuxer).not.toHaveBeenCalled();
+  });
+
+  it("detects nested m3u8 text mistaken for a media segment (# → 0x23)", async () => {
+    const playlist = new TextEncoder().encode("#EXTM3U\n#EXTINF:4,\nseg.ts\n");
+    await expect(transmuxTsToMp4(playlist)).rejects.toThrow(
+      "Input looks like an HLS playlist",
+    );
   });
 
   it("resolves with initSegment + data concatenated", async () => {

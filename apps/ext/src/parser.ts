@@ -6,6 +6,11 @@ export interface HlsEncryption {
   iv: Uint8Array<ArrayBuffer>;
 }
 
+export interface HlsKeyRef {
+  keyUrl: string;
+  explicitIv?: Uint8Array<ArrayBuffer>;
+}
+
 export interface HlsSegment {
   url: string;
   sequence: number;
@@ -48,15 +53,45 @@ export function parseMasterPlaylist(text: string, baseUrl: string): Variant[] {
 }
 
 /**
- * Parse an HLS media playlist, including AES-128 key rotation and IV rules.
+ * Parse the first AES-128 EXT-X-SESSION-KEY from a master playlist.
+ * Hotmart (and some CDNs) advertise encryption only here; media playlists
+ * may omit EXT-X-KEY and expect clients to inherit the session key.
  */
-export function parseMediaPlaylist(text: string, baseUrl: string): HlsSegment[] {
+export function parseSessionKey(
+  text: string,
+  baseUrl: string,
+): HlsKeyRef | undefined {
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("#EXT-X-SESSION-KEY:")) continue;
+
+    const key = parseAes128KeyTag(trimmed.slice("#EXT-X-SESSION-KEY:".length), baseUrl);
+    if (key) return key;
+  }
+  return undefined;
+}
+
+/**
+ * Parse an HLS media playlist, including AES-128 key rotation and IV rules.
+ * Optional `defaultKey` is used until the playlist defines its own EXT-X-KEY
+ * (or METHOD=NONE clears it) — typically from master EXT-X-SESSION-KEY.
+ */
+export function parseMediaPlaylist(
+  text: string,
+  baseUrl: string,
+  defaultKey?: HlsKeyRef,
+): HlsSegment[] {
   const segments: HlsSegment[] = [];
   let mediaSequence = 0;
   let segmentIndex = 0;
-  let currentKey:
-    | { keyUrl: string; explicitIv?: Uint8Array<ArrayBuffer> }
-    | undefined;
+  let currentKey: HlsKeyRef | undefined = defaultKey
+    ? {
+        keyUrl: defaultKey.keyUrl,
+        explicitIv: defaultKey.explicitIv
+          ? new Uint8Array(defaultKey.explicitIv)
+          : undefined,
+      }
+    : undefined;
 
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
@@ -80,15 +115,7 @@ export function parseMediaPlaylist(text: string, baseUrl: string): HlsSegment[] 
         throw new Error(`Unsupported HLS encryption method: ${method ?? "unknown"}`);
       }
 
-      const uri = attributes.get("URI");
-      if (!uri) throw new Error("AES-128 key URI is missing");
-
-      currentKey = {
-        keyUrl: new URL(uri, baseUrl).href,
-        explicitIv: attributes.has("IV")
-          ? parseIv(attributes.get("IV") ?? "")
-          : undefined,
-      };
+      currentKey = parseAes128KeyTag(trimmed.slice("#EXT-X-KEY:".length), baseUrl);
       continue;
     }
 
@@ -119,6 +146,24 @@ export function parseMediaPlaylist(text: string, baseUrl: string): HlsSegment[] 
  */
 export function parseVariantPlaylist(text: string, baseUrl: string): string[] {
   return parseMediaPlaylist(text, baseUrl).map((segment) => segment.url);
+}
+
+function parseAes128KeyTag(attributeBody: string, baseUrl: string): HlsKeyRef {
+  const attributes = parseAttributeList(attributeBody);
+  const method = attributes.get("METHOD");
+  if (method && method !== "AES-128") {
+    throw new Error(`Unsupported HLS encryption method: ${method}`);
+  }
+
+  const uri = attributes.get("URI");
+  if (!uri) throw new Error("AES-128 key URI is missing");
+
+  return {
+    keyUrl: new URL(uri, baseUrl).href,
+    explicitIv: attributes.has("IV")
+      ? parseIv(attributes.get("IV") ?? "")
+      : undefined,
+  };
 }
 
 function parseAttributeList(value: string): Map<string, string> {

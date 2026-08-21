@@ -62,17 +62,15 @@ async function restoreTabState(
         | ManifestInfo
         | undefined;
     }
-    const hasExactMatch = info !== undefined;
 
     for (const [storageKey, value] of Object.entries(stored)) {
       if (!storageKey.startsWith(tabManifestPrefix)) continue;
       const candidate = value as ManifestInfo;
       const key = storageKey.slice(MANIFEST_STORAGE_PREFIX.length);
       store.set(key, candidate);
-      if (
-        !hasExactMatch &&
-        (!info || candidate.timestamp > info.timestamp)
-      ) {
+      // Only fall back to "latest on this tab" when the caller did not ask for
+      // a specific video — otherwise multi-embed pages return the wrong one.
+      if (!entryId && (!info || candidate.timestamp > info.timestamp)) {
         info = candidate;
       }
     }
@@ -339,8 +337,12 @@ chrome.runtime.onMessage.addListener(
       return;
     }
 
-    const exact = msg.entryId ? store.get(`${tabId}:${msg.entryId}`) : undefined;
-    const info = exact ?? findLatestManifest(tabId);
+    // Prefer the exact video for this frame. Falling back to "latest on tab"
+    // when entryId is set would download the wrong embed on multi-video pages.
+    const exact = msg.entryId
+      ? store.get(`${tabId}:${msg.entryId}`)
+      : undefined;
+    const info = msg.entryId ? exact : findLatestManifest(tabId);
     if (!info || info.variants.length === 0) {
       void restoreTabState(tabId, msg.entryId).then((restored) => {
         if (!restored.info || restored.info.variants.length === 0) {

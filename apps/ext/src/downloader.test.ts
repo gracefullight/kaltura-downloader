@@ -9,9 +9,11 @@ vi.mock("./transmux.js", () => ({
 
 const mockParsePlaylist = vi.fn();
 const mockParseMaster = vi.fn();
+const mockParseSessionKey = vi.fn();
 vi.mock("./parser.js", () => ({
   parseMasterPlaylist: mockParseMaster,
   parseMediaPlaylist: mockParsePlaylist,
+  parseSessionKey: mockParseSessionKey,
 }));
 
 // --- Mock browser globals ---
@@ -100,7 +102,9 @@ describe("downloader (page context)", () => {
     mockTransmux.mockReset();
     mockParsePlaylist.mockReset();
     mockParseMaster.mockReset();
+    mockParseSessionKey.mockReset();
     mockParseMaster.mockReturnValue([]);
+    mockParseSessionKey.mockReturnValue(undefined);
   });
 
   it("posts READY on module load", () => {
@@ -200,9 +204,11 @@ describe("downloader (page context)", () => {
           ok: true,
           arrayBuffer: () => Promise.resolve(segmentData),
         });
-      mockParsePlaylist
-        .mockReturnValueOnce([])
-        .mockReturnValueOnce([segment("https://cdn.example.com/seg.ts")]);
+      // Master path must not treat STREAM-INF URIs as segments — media parse
+      // runs only after the master is resolved.
+      mockParsePlaylist.mockReturnValue([
+        segment("https://cdn.example.com/seg.ts"),
+      ]);
       mockParseMaster.mockReturnValue([
         {
           url: "https://cdn.example.com/v.m3u8",
@@ -225,6 +231,76 @@ describe("downloader (page context)", () => {
         2,
         "https://cdn.example.com/v.m3u8",
       );
+      expect(mockParseMaster).toHaveBeenCalled();
+      expect(mockParsePlaylist).toHaveBeenCalledTimes(1);
+      expect(mockParsePlaylist).toHaveBeenCalledWith(
+        expect.any(String),
+        "https://cdn.example.com/v.m3u8",
+        undefined,
+      );
+    });
+
+    it("does not download master STREAM-INF URIs as media segments", async () => {
+      // Regression for 0x23 / #EXTM3U: master URI lines must not be fetched as TS.
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          url: "https://vod.play.hotmart.com/video/abc/hls/master.m3u8",
+          text: () =>
+            Promise.resolve(
+              `#EXTM3U
+#EXT-X-SESSION-KEY:METHOD=AES-128,URI="https://keys.example.com/k"
+#EXT-X-STREAM-INF:BANDWIDTH=1244000
+stream-video=1244000.m3u8
+`,
+            ),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          url: "https://vod.play.hotmart.com/video/abc/hls/stream-video=1244000.m3u8",
+          text: () => Promise.resolve("#EXTM3U\n#EXTINF:4,\nseg-0.ts\n"),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new Uint8Array([0x47, 0x00]).buffer),
+        });
+
+      const sessionKey = { keyUrl: "https://keys.example.com/k" };
+      mockParseSessionKey.mockReturnValue(sessionKey);
+      mockParseMaster.mockReturnValue([
+        {
+          url: "https://vod.play.hotmart.com/video/abc/hls/stream-video=1244000.m3u8",
+          bandwidth: 1_244_000,
+          resolution: "unknown",
+          height: 0,
+          label: "1244kbps",
+        },
+      ]);
+      mockParsePlaylist.mockReturnValue([
+        segment(
+          "https://vod.play.hotmart.com/video/abc/hls/seg-0.ts",
+          0,
+        ),
+      ]);
+      mockTransmux.mockResolvedValue(new Uint8Array([1]));
+
+      sendMessage({
+        type: "START_DOWNLOAD",
+        variantUrl: "https://vod.play.hotmart.com/video/abc/hls/master.m3u8",
+        filename: "hotmart_hls.ts",
+      });
+
+      await waitForPosted("COMPLETE");
+
+      // Second fetch must be the media playlist, never treating it as binary TS.
+      expect(mockFetch.mock.calls[1][0]).toContain("stream-video=1244000.m3u8");
+      expect(mockParsePlaylist).toHaveBeenCalledWith(
+        expect.any(String),
+        "https://vod.play.hotmart.com/video/abc/hls/stream-video=1244000.m3u8",
+        sessionKey,
+      );
+      // Binary segment only — not the nested m3u8 text
+      expect(mockTransmux.mock.calls[0][0][0]).toBe(0x47);
     });
 
     it("converts .ts filename to .mp4", async () => {
@@ -402,6 +478,183 @@ describe("downloader (page context)", () => {
       const transmuxInput = mockTransmux.mock.calls[0][0] as Uint8Array;
       expect(Array.from(transmuxInput)).toEqual(Array.from(plaintext));
       expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
+    it("decrypts Hotmart-style AES-CBC segments without PKCS#7 padding", async () => {
+      const { createCipheriv } = await import("node:crypto");
+
+      const keyData = Buffer.alloc(16, 0x3a);
+      const iv = Buffer.alloc(16, 0);
+      iv[15] = 1;
+      // Full MPEG-TS packet (188 bytes) padded to block boundary without PKCS#7.
+      const plaintext = Buffer.alloc(192, 0);
+      for (let i = 0; i < 188; i += 188) plaintext[i] = 0x47;
+      plaintext[0] = 0x47;
+
+      const cipher = createCipheriv("aes-128-cbc", keyData, iv);
+      cipher.setAutoPadding(false);
+      const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve("#EXTM3U\nhotmart.ts\n"),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () =>
+            Promise.resolve(
+              encrypted.buffer.slice(
+                encrypted.byteOffset,
+                encrypted.byteOffset + encrypted.byteLength,
+              ),
+            ),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () =>
+            Promise.resolve(
+              keyData.buffer.slice(keyData.byteOffset, keyData.byteOffset + keyData.byteLength),
+            ),
+        });
+
+      mockParsePlaylist.mockReturnValue([
+        {
+          ...segment("https://cdn.example.com/hotmart.ts", 1),
+          encryption: {
+            method: "AES-128",
+            keyUrl: "https://keys.example.com/hotmart.key",
+            iv: new Uint8Array(iv),
+          },
+        },
+      ]);
+      mockTransmux.mockResolvedValue(new Uint8Array([1]));
+
+      sendMessage({
+        type: "START_DOWNLOAD",
+        variantUrl: "https://cdn.example.com/v.m3u8",
+        filename: "hotmart.ts",
+      });
+
+      await waitForPosted("COMPLETE");
+
+      const transmuxInput = mockTransmux.mock.calls[0][0] as Uint8Array;
+      expect(transmuxInput[0]).toBe(0x47);
+      expect(Array.from(transmuxInput)).toEqual(Array.from(plaintext));
+    });
+
+    it("passes master EXT-X-SESSION-KEY into media playlist parse", async () => {
+      const sessionKey = {
+        keyUrl: "https://keys.example.com/session.key",
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          url: "https://cdn.example.com/master.m3u8",
+          text: () =>
+            Promise.resolve(
+              `#EXTM3U
+#EXT-X-SESSION-KEY:METHOD=AES-128,URI="https://keys.example.com/session.key"
+#EXT-X-STREAM-INF:BANDWIDTH=1000000
+media.m3u8
+`,
+            ),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          url: "https://cdn.example.com/media.m3u8",
+          text: () => Promise.resolve("#EXTM3U\n#EXTINF:4,\nseg-0.ts\n"),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(4)),
+        });
+
+      mockParsePlaylist.mockReturnValue([
+        segment("https://cdn.example.com/seg-0.ts", 0),
+      ]);
+      mockParseMaster.mockReturnValue([
+        {
+          url: "https://cdn.example.com/media.m3u8",
+          bandwidth: 1_000_000,
+          resolution: "unknown",
+          height: 0,
+          label: "1000kbps",
+        },
+      ]);
+      mockParseSessionKey.mockReturnValue(sessionKey);
+      mockTransmux.mockResolvedValue(new Uint8Array([1]));
+
+      sendMessage({
+        type: "START_DOWNLOAD",
+        variantUrl: "https://cdn.example.com/master.m3u8",
+        filename: "session.ts",
+      });
+
+      await waitForPosted("COMPLETE");
+
+      expect(mockParseSessionKey).toHaveBeenCalled();
+      expect(mockParsePlaylist).toHaveBeenCalledWith(
+        expect.any(String),
+        "https://cdn.example.com/media.m3u8",
+        sessionKey,
+      );
+    });
+
+    it("loads SESSION-KEY from masterUrl when downloading a media variant", async () => {
+      const sessionKey = { keyUrl: "https://keys.example.com/session.key" };
+
+      mockFetch
+        // masterUrl for SESSION-KEY
+        .mockResolvedValueOnce({
+          ok: true,
+          url: "https://cdn.example.com/master.m3u8",
+          text: () =>
+            Promise.resolve(
+              `#EXTM3U
+#EXT-X-SESSION-KEY:METHOD=AES-128,URI="https://keys.example.com/session.key"
+#EXT-X-STREAM-INF:BANDWIDTH=1
+media.m3u8
+`,
+            ),
+        })
+        // media variant playlist (no EXT-X-KEY)
+        .mockResolvedValueOnce({
+          ok: true,
+          url: "https://cdn.example.com/media.m3u8",
+          text: () => Promise.resolve("#EXTM3U\nseg.ts\n"),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(4)),
+        });
+
+      mockParseSessionKey.mockReturnValue(sessionKey);
+      mockParseMaster.mockReturnValue([]); // media playlist has no STREAM-INF
+      mockParsePlaylist.mockReturnValue([
+        segment("https://cdn.example.com/seg.ts", 0),
+      ]);
+      mockTransmux.mockResolvedValue(new Uint8Array([1]));
+
+      sendMessage({
+        type: "START_DOWNLOAD",
+        variantUrl: "https://cdn.example.com/media.m3u8",
+        masterUrl: "https://cdn.example.com/master.m3u8",
+        filename: "from-master-key.ts",
+      });
+
+      await waitForPosted("COMPLETE");
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        "https://cdn.example.com/master.m3u8",
+      );
+      expect(mockParsePlaylist).toHaveBeenCalledWith(
+        expect.any(String),
+        "https://cdn.example.com/media.m3u8",
+        sessionKey,
+      );
     });
   });
 

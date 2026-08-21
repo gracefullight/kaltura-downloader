@@ -376,6 +376,65 @@ describe("background service worker", () => {
       expect(chrome.action.enable).not.toHaveBeenCalled();
       expect(mockFetch).not.toHaveBeenCalled();
     });
+
+    it("returns the matching video when a tab has multiple Hotmart embeds", () => {
+      const topUrl =
+        "https://vod-akm.play.hotmart.com/video/topVideo/hls/master.m3u8";
+      const bottomUrl =
+        "https://vod-akm.play.hotmart.com/video/bottomVideo/hls/master.m3u8";
+
+      // Top embed loads first, bottom loads later (would be "latest").
+      hotmartManifest()({ tabId: 77, url: topUrl });
+      hotmartManifest()({ tabId: 77, url: bottomUrl });
+
+      const sendTop = vi.fn();
+      onMessageCb(
+        { type: "GET_DOWNLOAD_INFO", entryId: "topVideo" },
+        { tab: { id: 77 } },
+        sendTop,
+      );
+      expect(sendTop).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ok: true,
+          masterUrl: topUrl,
+          variants: [expect.objectContaining({ url: topUrl })],
+        }),
+      );
+
+      const sendBottom = vi.fn();
+      onMessageCb(
+        { type: "GET_DOWNLOAD_INFO", entryId: "bottomVideo" },
+        { tab: { id: 77 } },
+        sendBottom,
+      );
+      expect(sendBottom).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ok: true,
+          masterUrl: bottomUrl,
+          variants: [expect.objectContaining({ url: bottomUrl })],
+        }),
+      );
+    });
+
+    it("does not fall back to another video when the requested entryId is missing", () => {
+      hotmartManifest()({
+        tabId: 78,
+        url: "https://vod-akm.play.hotmart.com/video/onlyTop/hls/master.m3u8",
+      });
+
+      const sendResponse = vi.fn();
+      const result = onMessageCb(
+        { type: "GET_DOWNLOAD_INFO", entryId: "bottomMissing" },
+        { tab: { id: 78 } },
+        sendResponse,
+      );
+
+      // Async restore path — must not synchronously return the other video.
+      expect(result).toBe(true);
+      return vi.waitFor(() => {
+        expect(sendResponse).toHaveBeenCalledWith({ ok: false });
+      });
+    });
   });
 
   describe("GET_DOWNLOAD_INFO handler", () => {

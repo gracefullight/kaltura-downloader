@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseMasterPlaylist,
   parseMediaPlaylist,
+  parseSessionKey,
   parseVariantPlaylist,
 } from "./parser.js";
 
@@ -334,5 +335,83 @@ segment.ts`;
     expect(() =>
       parseMediaPlaylist(m3u8, "https://cdn.example.com/list.m3u8"),
     ).toThrow("Unsupported HLS encryption method");
+  });
+
+  it("inherits AES-128 defaultKey when media omits EXT-X-KEY (Hotmart SESSION-KEY)", () => {
+    const m3u8 = `#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:0
+#EXTINF:4.0,
+seg-0.ts
+#EXTINF:4.0,
+seg-1.ts
+#EXT-X-ENDLIST`;
+
+    const segments = parseMediaPlaylist(m3u8, "https://cdn.hotmart.com/media.m3u8", {
+      keyUrl: "https://keys.hotmart.com/video.key",
+    });
+
+    expect(segments).toHaveLength(2);
+    expect(segments[0].encryption).toMatchObject({
+      method: "AES-128",
+      keyUrl: "https://keys.hotmart.com/video.key",
+    });
+    expect(Array.from(segments[0].encryption?.iv ?? [])).toEqual([
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
+    expect(segments[1].encryption?.iv[15]).toBe(1);
+  });
+
+  it("lets media EXT-X-KEY override the inherited session key", () => {
+    const m3u8 = `#EXTM3U
+#EXT-X-KEY:METHOD=AES-128,URI="override.key",IV=0xff
+seg.ts`;
+
+    const segments = parseMediaPlaylist(m3u8, "https://cdn.example.com/media.m3u8", {
+      keyUrl: "https://keys.example.com/session.key",
+    });
+
+    expect(segments[0].encryption?.keyUrl).toBe(
+      "https://cdn.example.com/override.key",
+    );
+    expect(segments[0].encryption?.iv[15]).toBe(0xff);
+  });
+});
+
+describe("parseSessionKey", () => {
+  it("parses AES-128 EXT-X-SESSION-KEY from a Hotmart-style master", () => {
+    const master = `#EXTM3U
+#EXT-X-SESSION-KEY:METHOD=AES-128,URI="https://contentplayer.hotmart.com/key/abc"
+#EXT-X-STREAM-INF:BANDWIDTH=1244000,RESOLUTION=1280x720
+https://cdn.example.com/720/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=800000
+https://cdn.example.com/480/index.m3u8`;
+
+    const key = parseSessionKey(master, "https://cdn.example.com/master.m3u8");
+
+    expect(key).toEqual({
+      keyUrl: "https://contentplayer.hotmart.com/key/abc",
+      explicitIv: undefined,
+    });
+  });
+
+  it("resolves relative SESSION-KEY URI and optional IV", () => {
+    const master = `#EXTM3U
+#EXT-X-SESSION-KEY:METHOD=AES-128,URI="keys/v.key",IV=0x0a
+#EXT-X-STREAM-INF:BANDWIDTH=1
+media.m3u8`;
+
+    const key = parseSessionKey(master, "https://cdn.example.com/hls/master.m3u8");
+
+    expect(key?.keyUrl).toBe("https://cdn.example.com/hls/keys/v.key");
+    expect(key?.explicitIv?.[15]).toBe(0x0a);
+  });
+
+  it("returns undefined when master has no SESSION-KEY", () => {
+    expect(
+      parseSessionKey(
+        "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nm.m3u8\n",
+        "https://cdn.example.com/master.m3u8",
+      ),
+    ).toBeUndefined();
   });
 });

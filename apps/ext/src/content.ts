@@ -6,6 +6,7 @@
  */
 
 import { sanitizeFilename } from "./filename.js";
+import { resolveFrameEntryId } from "./frame-entry-id.js";
 import type {
   CaptionInfo,
   CaptionReadyMessage,
@@ -63,9 +64,8 @@ function reportHotmartManifests(): void {
 
 reportHotmartManifests();
 
-const entryIdMatch = location.pathname.match(/entryid\/([^/]+)/i);
 {
-  const entryId = entryIdMatch?.[1] ?? "";
+  const entryId = resolveFrameEntryId(location.pathname);
   let variants: Pick<
     Variant,
     "url" | "label" | "resolution" | "bandwidth"
@@ -311,6 +311,8 @@ const entryIdMatch = location.pathname.match(/entryid\/([^/]+)/i);
         source: MSG_TO_PAGE,
         type: "START_DOWNLOAD",
         variantUrl: variant.url,
+        // Media variants often omit EXT-X-KEY; SESSION-KEY lives on the master.
+        masterUrl: masterUrl ?? undefined,
         filename,
       },
       "*",
