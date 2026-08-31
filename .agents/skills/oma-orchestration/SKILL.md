@@ -1,9 +1,9 @@
 ---
-name: oma-orchestrator
-description: Automated multi-agent orchestrator that spawns CLI subagents in parallel, coordinates via MCP Memory, and monitors progress. Use for orchestration, parallel execution, and automated multi-agent workflows.
+name: oma-orchestration
+description: Automated multi-agent orchestration that spawns CLI subagents in parallel, coordinates via MCP Memory, and monitors progress. Use for orchestration, parallel execution, and automated multi-agent workflows.
 ---
 
-# Orchestrator - Automated Multi-Agent Coordinator
+# Orchestration - Automated Multi-Agent Coordination
 
 ## Scheduling
 
@@ -319,7 +319,6 @@ At session end, if CD >= 50:
 - API contract template (SSOT): `../_shared/core/api-contracts/template.md`; read generated contracts from `.agents/results/api-contracts/` (run artifact) or `docs/plans/contracts/` (durable spec)
 - Context loading: `../_shared/core/context-loading.md`
 - Difficulty guide: `../_shared/core/difficulty-guide.md`
-- Reasoning templates: `../_shared/core/reasoning-templates.md`
 - Clarification protocol: `../_shared/core/clarification-protocol.md`
 - Context budget: `../_shared/core/context-budget.md`
 - Lessons learned: `../_shared/core/lessons-learned.md`

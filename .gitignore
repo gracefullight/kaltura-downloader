@@ -12,3 +12,5 @@ apps/ext/artifacts/
 .agents/backup/
 docs/plans/
 .migration-backup/
+
+.qwen/tmp/
