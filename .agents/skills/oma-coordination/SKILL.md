@@ -38,7 +38,6 @@ Guide manual multi-agent coordination for complex work that spans PM, frontend, 
 
 ### Dependencies
 - PM, frontend, backend, mobile, QA, and orchestrator skills
-- `resources/examples.md`
 - CLI `oma agent:spawn` and progress/result memory conventions
 
 ### Control-flow features
@@ -98,7 +97,7 @@ oma agent:spawn frontend "<frontend task>" <session-id> -w ./frontend &
 wait
 ```
 
-When native runtime dispatch is available (per-agent target vendor equals the current runtime vendor), prefer the runtime's native subagent path and use `oma agent:spawn` as the cross-vendor fallback — same resolution rule as oma-orchestrator.
+When native runtime dispatch is available (per-agent target vendor equals the current runtime vendor), prefer the runtime's native subagent path and use `oma agent:spawn` as the cross-vendor fallback — same resolution rule as oma-orchestration.
 
 Useful `agent:spawn` options: `-m/--model <vendor>` (CLI vendor override), `--isolation worktree` (git worktree per spawn, prevents file conflicts), `--read-only` (non-destructive tools only, e.g. for review/QA passes).
 
@@ -166,4 +165,3 @@ For fully automated execution without manual spawning, use the **orchestrator** 
 
 ## References
 
-- Workflow examples: `resources/examples.md`

@@ -70,7 +70,7 @@ For SCM operations, additionally summarize branch/ahead-behind/conflict state as
 ### Step 2.5: Conflict-risk triage (required for large-scope merges)
 
 Trigger this step when merge scope is large by change footprint, not PR count.
-Read thresholds from `.agents/skills/oma-scm/config/cm-config.yaml` `large_merge_thresholds.*` first.
+Read thresholds from `.agents/oma-config.yaml` `large_merge_thresholds.*` first.
 If config values are missing, use these defaults:
 - combined changed files >= 150
 - combined additions+deletions >= 3000 lines
@@ -215,4 +215,8 @@ Failure handling and rollback:
 - Do NOT use `git add -A` / `git add .`; always specify files
 - Do NOT commit secrets files (.env, credentials)
 - For multi-line commit messages, use HEREDOC by default; if unstable or very long, use `git commit -F <message-file>`
-- Co-Author: `First Fluke <our.first.fluke@gmail.com>`
+- Co-Author: `First Fluke <our.first.fluke@gmail.com>` — copy this address, never
+  type it from memory. GitHub credits whoever has a co-author address verified
+  on their account, so a slip attributes the work to an unrelated person and
+  `refs/pull/*` makes it permanent. `.githooks/commit-msg` rejects any address
+  outside `scm.co_author` / `.githooks/co-authors.allow`.
