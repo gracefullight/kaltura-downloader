@@ -12,3 +12,7 @@ apps/ext/artifacts/
 .agents/backup/
 docs/plans/
 .migration-backup/
+
+.agents/oma-config.local.cue
+.agents/oma-config.local.yaml
+.qwen/tmp/
